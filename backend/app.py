@@ -528,8 +528,13 @@ def embed_data():
                 **view_filters,         # view filters win (hunter_ids, species, locations, years, group_by)
                 'chart_type': vrow['chart_type'] or tok_params.get('chart_type', 'bar'),
             }
-    for key in ['hunter_ids','species','locations','year_from','year_to','group_by','chart_type']:
-        val = request.args.getlist(key) or request.args.get(key)
+    # Multi-value keys use getlist(); scalar keys use get() to avoid passing lists to SQLite
+    for key in ['hunter_ids', 'species', 'locations']:
+        val = request.args.getlist(key)
+        if val:
+            params[key] = val
+    for key in ['year_from', 'year_to', 'group_by', 'chart_type']:
+        val = request.args.get(key)
         if val:
             params[key] = val
     conditions, qparams = [], []
