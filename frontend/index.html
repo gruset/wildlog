@@ -1176,7 +1176,7 @@ async function confirmSaveView() {
   if (!name) { toast('Enter a name', false); return; }
   await api('/views', {
     method: 'POST',
-    body: JSON.stringify({ name, filters: pendingFilters, chart_type: currentChartType })
+    body: JSON.stringify({ name, filters: { ...pendingFilters, show_labels: showLabels }, chart_type: currentChartType })
   });
   closeSaveModal();
   toast('View saved!');
@@ -1216,10 +1216,13 @@ async function applyView(id) {
   // Switch to leaderboard page and apply
   showPage('leaderboard');
   setTimeout(() => {
-    // Apply filter UI values
     if (filters.year_from) document.getElementById('lb-year-from').value = filters.year_from;
-    if (filters.year_to) document.getElementById('lb-year-to').value = filters.year_to;
-    if (filters.group_by) document.getElementById('lb-groupby').value = filters.group_by;
+    if (filters.year_to)   document.getElementById('lb-year-to').value   = filters.year_to;
+    if (filters.group_by)  document.getElementById('lb-groupby').value   = filters.group_by;
+    // Restore labels toggle
+    showLabels = filters.show_labels === true || filters.show_labels === 'true';
+    const labelsBtn = document.getElementById('labels-toggle');
+    if (labelsBtn) labelsBtn.classList.toggle('active', showLabels);
     loadLeaderboard({ ...filters, chart_type: v.chart_type });
     toast(`Loaded view: ${v.name}`);
   }, 100);
@@ -1235,6 +1238,7 @@ async function openEditView(id) {
   document.getElementById('edit-view-name').value = v.name;
   document.getElementById('edit-view-groupby').value = f.group_by || 'hunter';
   document.getElementById('edit-view-chart').value = v.chart_type || 'bar';
+  document.getElementById('edit-view-labels').value = String(f.show_labels === true || f.show_labels === 'true');
   document.getElementById('edit-view-year-from').value = f.year_from || '';
   document.getElementById('edit-view-year-to').value   = f.year_to   || '';
   document.getElementById('edit-view-error').textContent = '';
@@ -1268,7 +1272,8 @@ async function submitEditView() {
 
   const getMulti = elId => Array.from(document.getElementById(elId).selectedOptions).map(o => o.value).filter(Boolean);
   const filters = {
-    group_by: document.getElementById('edit-view-groupby').value,
+    group_by:    document.getElementById('edit-view-groupby').value,
+    show_labels: document.getElementById('edit-view-labels').value === 'true',
   };
   const yf = document.getElementById('edit-view-year-from').value;
   const yt = document.getElementById('edit-view-year-to').value;
@@ -1718,6 +1723,13 @@ checkAuth();
             <option value="pie">Pie</option>
             <option value="doughnut">Doughnut</option>
             <option value="polarArea">Polar Area</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Show Data Labels</label>
+          <select id="edit-view-labels">
+            <option value="false">Off</option>
+            <option value="true">On</option>
           </select>
         </div>
         <div class="form-group">

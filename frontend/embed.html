@@ -248,7 +248,9 @@
 
       // Build datalabels config — same best-practice rules as main app
       let datalabels;
-      if (isHBar) {
+      if (!showLabels) {
+        datalabels = { display: false };
+      } else if (isHBar) {
         datalabels = {
           display: true, formatter: v => v, font,
           anchor: 'end',
