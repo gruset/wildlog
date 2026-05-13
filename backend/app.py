@@ -38,7 +38,8 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'viewer',
             created_at TEXT DEFAULT (datetime('now')),
-            last_login TEXT
+            last_login TEXT,
+            disabled INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS hunters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,6 +76,11 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now'))
         );
     ''')
+
+    # Migration: add disabled column to existing DBs
+    cols = [r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
+    if 'disabled' not in cols:
+        c.execute("ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0")
 
     if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         default_pw = os.environ.get('ADMIN_PASSWORD', 'changeme')
@@ -151,6 +157,9 @@ def login():
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if user and bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
+        if user['disabled']:
+            conn.close()
+            return jsonify({'error': 'This account has been disabled'}), 403
         conn.execute("UPDATE users SET last_login=datetime('now') WHERE id=?", (user['id'],))
         conn.commit()
         conn.close()
@@ -181,7 +190,7 @@ def me():
 def get_users():
     conn = get_db()
     rows = conn.execute(
-        "SELECT id,username,role,created_at,last_login FROM users ORDER BY username"
+        "SELECT id,username,role,created_at,last_login,disabled FROM users ORDER BY username"
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -252,6 +261,20 @@ def change_role(user_id):
         return jsonify({'error': 'Role must be admin or viewer'}), 400
     conn = get_db()
     conn.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/users/<int:user_id>/disabled', methods=['POST'])
+@admin_required
+def set_disabled(user_id):
+    if user_id == session['user_id']:
+        return jsonify({'error': 'Cannot disable your own account'}), 400
+    data = request.json or {}
+    disabled = 1 if data.get('disabled') else 0
+    conn = get_db()
+    conn.execute("UPDATE users SET disabled=? WHERE id=?", (disabled, user_id))
     conn.commit()
     conn.close()
     return jsonify({'success': True})

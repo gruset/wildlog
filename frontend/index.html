@@ -1409,15 +1409,23 @@ function renderUsersTable(users) {
   if (!users.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No users.</p>';
   const isSelf = u => u.username === currentUser.username;
   return `<table>
-    <thead><tr><th>Username</th><th>Role</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
-    <tbody>${users.map(u => `<tr>
+    <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
+    <tbody>${users.map(u => `<tr style="${u.disabled ? 'opacity:0.5;' : ''}">
       <td>${escHtml(u.username)}${isSelf(u) ? ' <span style="color:var(--amber);font-size:0.72rem;">(you)</span>' : ''}</td>
       <td>
-        <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) ? 'disabled' : ''}
+        <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) || u.disabled ? 'disabled' : ''}
           style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;">
           <option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>
           <option value="admin"  ${u.role==='admin' ?'selected':''}>Admin</option>
         </select>
+      </td>
+      <td>
+        ${isSelf(u)
+          ? '<span style="color:var(--sage);font-size:0.78rem;">Active</span>'
+          : u.disabled
+            ? `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:var(--sage);color:var(--sage);" onclick="toggleDisabled(${u.id}, false)">Enable</button>`
+            : `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:#c87a2a;color:#c87a2a;" onclick="toggleDisabled(${u.id}, true)">Disable</button>`
+        }
       </td>
       <td style="color:var(--fog);font-size:0.82rem;">${u.last_login ? u.last_login.slice(0,16) : '—'}</td>
       <td style="color:var(--fog);font-size:0.82rem;">${u.created_at.slice(0,10)}</td>
@@ -1425,6 +1433,16 @@ function renderUsersTable(users) {
         onclick="deleteUser(${u.id},'${escHtml(u.username)}')" ${isSelf(u)?'disabled':''}>✕</button></td>
     </tr>`).join('')}</tbody>
   </table>`;
+}
+
+async function toggleDisabled(id, disable) {
+  const action = disable ? 'Disable' : 'Enable';
+  if (!confirm(action + ' this user?')) return;
+  try {
+    await api('/users/' + id + '/disabled', { method: 'POST', body: JSON.stringify({ disabled: disable }) });
+    toast('User ' + (disable ? 'disabled' : 'enabled'));
+    loadUsersPage();
+  } catch(e) { toast('Error: ' + (e.message || 'unknown'), false); }
 }
 
 async function createUser() {
