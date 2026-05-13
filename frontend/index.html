@@ -685,12 +685,12 @@ function chartOptions(title) {
   };
 }
 
-function renderTable(rows) {
+function renderTable(rows, deleteFn = 'deleteEntry') {
   if (!rows.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No entries found.</p>';
-  const keys = Object.keys(rows[0]);
+  const keys = Object.keys(rows[0]).filter(k => !k.startsWith('_'));
   return `<table>
     <thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}<th></th></tr></thead>
-    <tbody>${rows.map((r, i) => `<tr>${keys.map(k => `<td>${r[k]??''}</td>`).join('')}<td>${r._id ? `<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deleteEntry(${r._id})">✕</button>` : ''}</td></tr>`).join('')}</tbody>
+    <tbody>${rows.map((r) => `<tr>${keys.map(k => `<td>${r[k]??''}</td>`).join('')}<td>${r._id ? `<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="${deleteFn}(${r._id})">✕</button>` : ''}</td></tr>`).join('')}</tbody>
   </table>`;
 }
 
@@ -861,7 +861,8 @@ async function loadHunters() {
   const totals = Object.fromEntries(stats.map(r => [r.hunter_id, r.total]));
 
   document.getElementById('hunters-table').innerHTML = renderTable(
-    hunters.map(h => ({ _id: null, Name: h.name, 'Total Game': totals[h.id] || 0, 'Member Since': h.created_at.slice(0,10) }))
+    hunters.map(h => ({ _id: h.id, Name: h.name, 'Total Game': totals[h.id] || 0, 'Member Since': h.created_at.slice(0,10) })),
+    'deleteHunter'
   );
   populateFilterDropdowns();
 }
@@ -882,6 +883,26 @@ async function addHunter() {
     } else {
       toast(`Error: ${msg || 'could not reach API'}`, false);
     }
+  }
+}
+
+async function deleteHunter(id) {
+  const hunter = hunters.find(h => h.id === id);
+  if (!hunter) return;
+  const stats = await api('/stats/leaderboard');
+  const total = (stats.find(r => r.hunter_id === id) || {}).total || 0;
+  const msg = total > 0
+    ? `Delete "${hunter.name}" and all ${total} of their game records? This cannot be undone.`
+    : `Delete hunter "${hunter.name}"? This cannot be undone.`;
+  if (!confirm(msg)) return;
+  try {
+    await api('/hunters/' + id, { method: 'DELETE' });
+    toast(`${hunter.name} deleted`);
+    hunters = await api('/hunters');
+    await loadHunters();
+    await loadDashboard();
+  } catch (e) {
+    toast('Error deleting hunter', false);
   }
 }
 
