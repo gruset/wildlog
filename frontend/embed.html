@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WildLog Embed</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Serif+4:wght@300;400;600&display=swap');
 
@@ -231,26 +232,72 @@
 
     // Draw chart
     if (lb.length) {
-      const palette = ['#c8860a','#7a9e7e','#8b6a4a','#4a7a8a','#9a7a4a','#6a8a4a','#8a4a6a','#4a6a8a'];
-      const labels = lb.map(r => r.label);
-      const values = lb.map(r => r.total);
-      const bgColors = labels.map((_,i) => palette[i%palette.length] + 'cc');
-      const bdColors = labels.map((_,i) => palette[i%palette.length]);
-      const isRadial = ['pie','doughnut','polarArea'].includes(chartType);
-      const isHBar   = chartType === 'horizontalBar';
-      const cType    = isHBar ? 'bar' : chartType;
+      Chart.unregister(ChartDataLabels);
+
+      const palette   = ['#c8860a','#7a9e7e','#8b6a4a','#4a7a8a','#9a7a4a','#6a8a4a','#8a4a6a','#4a6a8a'];
+      const labels    = lb.map(r => r.label);
+      const values    = lb.map(r => r.total);
+      const max       = Math.max(...values) || 1;
+      const bgColors  = labels.map((_,i) => palette[i%palette.length] + 'cc');
+      const bdColors  = labels.map((_,i) => palette[i%palette.length]);
+      const isRadial  = ['pie','doughnut','polarArea'].includes(chartType);
+      const isHBar    = chartType === 'horizontalBar';
+      const cType     = isHBar ? 'bar' : chartType;
       const textColor = theme === 'light' ? '#2d1e0f' : '#d4c9b8';
+      const font      = { family: "'Source Serif 4'", weight: '600', size: 11 };
+
+      // Build datalabels config — same best-practice rules as main app
+      let datalabels;
+      if (isHBar) {
+        datalabels = {
+          display: true, formatter: v => v, font,
+          anchor: 'end',
+          align: ctx => (ctx.dataset.data[ctx.dataIndex] / max) >= 0.15 ? 'start' : 'end',
+          color: ctx => (ctx.dataset.data[ctx.dataIndex] / max) >= 0.15 ? '#fff' : '#e8b84b',
+          clamp: true, offset: 4,
+        };
+      } else if (cType === 'bar') {
+        datalabels = {
+          display: true, formatter: v => v, font,
+          anchor: 'end', align: 'end', color: '#e8b84b', offset: 4,
+        };
+      } else if (cType === 'pie' || cType === 'doughnut') {
+        datalabels = {
+          display: ctx => {
+            const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+            return (ctx.dataset.data[ctx.dataIndex] / total) >= 0.04;
+          },
+          formatter: (v, ctx) => {
+            const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+            return Math.round(v / total * 100) + '%';
+          },
+          font: { ...font, size: 12 },
+          anchor: 'center', align: 'center', color: '#fff',
+          textShadowBlur: 4, textShadowColor: 'rgba(0,0,0,0.6)',
+        };
+      } else {
+        datalabels = {
+          display: true, formatter: v => v, font,
+          anchor: 'center', align: 'center', color: '#fff',
+          textShadowBlur: 3, textShadowColor: 'rgba(0,0,0,0.5)',
+        };
+      }
+
+      const layoutPadding = cType === 'bar' ? { top: 24 } : isHBar ? { right: 40 } : {};
 
       new Chart(document.getElementById('embed-chart'), {
         type: cType,
+        plugins: [ChartDataLabels],
         data: { labels, datasets: [{ label: 'Game', data: values, backgroundColor: bgColors, borderColor: isRadial ? 'transparent' : bdColors, borderWidth: 2, borderRadius: cType === 'bar' ? 3 : 0 }] },
         options: {
           responsive: true, maintainAspectRatio: false,
           indexAxis: isHBar ? 'y' : 'x',
           animation: { duration: 800, easing: 'easeOutQuart' },
+          layout: { padding: layoutPadding },
           plugins: {
             legend: { display: isRadial, labels: { color: textColor, font: { family: "'Source Serif 4'", size: 11 }, boxWidth: 12 } },
-            tooltip: { backgroundColor: '#1a0e05', borderColor: '#c8860a', borderWidth: 1, titleColor: '#e8b84b', bodyColor: '#f5ede0' }
+            tooltip: { backgroundColor: '#1a0e05', borderColor: '#c8860a', borderWidth: 1, titleColor: '#e8b84b', bodyColor: '#f5ede0' },
+            datalabels,
           },
           scales: isRadial ? {} : {
             x: { ticks: { color: textColor, font: { family: "'Source Serif 4'", size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
