@@ -180,6 +180,7 @@
     const lb   = data.leaderboard || [];
     const p    = data.params || {};
     const chartType    = p.chart_type || 'bar';
+      const showLabels   = p.show_labels === true || p.show_labels === 'true';
     const displayTitle = data.token_name || 'WildLog';
 
     let html = `
