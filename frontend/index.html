@@ -543,75 +543,30 @@
   <!-- ── EMBEDS ── -->
   <div id="page-embeds" class="page">
     <div class="card" style="margin-bottom:1.5rem;">
-      <div class="card-title">Create Embed Token</div>
-      <div class="form-grid" id="embed-form">
-        <div class="form-group">
-          <label>Name *</label>
-          <input id="emb-name" type="text" placeholder="e.g. Club Website — Moose 2024">
-        </div>
-        <div class="form-group">
-          <label>Mode</label>
-          <select id="emb-mode">
-            <option value="leaderboard">Leaderboard</option>
-            <option value="dashboard">Dashboard</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Link to Saved View</label>
-          <select id="emb-view">
-            <option value="">None (use filters below)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Group By</label>
-          <select id="emb-groupby">
-            <option value="hunter">Hunter</option>
-            <option value="species">Species</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Chart Type</label>
-          <select id="emb-chart">
-            <option value="bar">Bar</option>
-            <option value="horizontalBar">Horizontal Bar</option>
-            <option value="pie">Pie</option>
-            <option value="doughnut">Doughnut</option>
-            <option value="polarArea">Polar Area</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Theme</label>
-          <select id="emb-theme">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="transparent">Transparent</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Show Chart</label>
-          <select id="emb-show-chart">
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Show Ranked List</label>
-          <select id="emb-show-list">
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Year From</label>
-          <input id="emb-year-from" type="number" placeholder="e.g. 2024" min="2000" max="2099">
-        </div>
-        <div class="form-group">
-          <label>Year To</label>
-          <input id="emb-year-to" type="number" placeholder="e.g. 2025" min="2000" max="2099">
-        </div>
+      <div class="card-title">Create Embed</div>
+      <p style="font-size:0.85rem;color:var(--fog);margin-bottom:1.25rem;">
+        Each embed is a read-only iframe of a saved view. Create your views on the
+        <a href="#" onclick="showPage('leaderboard');return false;" style="color:var(--gold);">Leaderboard</a> page first.
+      </p>
+      <div id="no-views-msg" style="display:none;color:var(--fog);font-size:0.85rem;padding:0.5rem 0;">
+        No saved views yet — go to the Leaderboard page and save a view before creating an embed.
       </div>
-      <div class="btn-row" style="margin-top:1.25rem;">
-        <button class="btn btn-primary" onclick="createToken()">Generate Embed Token</button>
+      <div id="embed-create-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Embed Name *</label>
+            <input id="emb-name" type="text" placeholder="e.g. Club Website — Top Hunters">
+          </div>
+          <div class="form-group">
+            <label>Saved View *</label>
+            <select id="emb-view">
+              <option value="">— select a view —</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:1.25rem;">
+          <button class="btn btn-primary" onclick="createToken()">Generate Embed</button>
+        </div>
       </div>
     </div>
 
@@ -1272,18 +1227,9 @@ async function deleteView(id) {
 let currentEmbedUrl = '';
 let currentEmbedW = 600, currentEmbedH = 400;
 
-function buildEmbedUrl(token, opts = {}) {
-  const base = location.origin + '/embed.html';
-  const p = new URLSearchParams({ token });
-  if (opts.theme && opts.theme !== 'dark')   p.set('theme', opts.theme);
-  if (opts.group_by)                          p.set('group_by', opts.group_by);
-  if (opts.chart_type)                        p.set('chart_type', opts.chart_type);
-  if (opts.show_chart === 'false')            p.set('chart', 'false');
-  if (opts.show_list  === 'false')            p.set('list', 'false');
-  if (opts.year_from)                         p.set('year_from', opts.year_from);
-  if (opts.year_to)                           p.set('year_to', opts.year_to);
-  if (opts.title)                             p.set('title', opts.title);
-  return base + '?' + p.toString();
+function buildEmbedUrl(token) {
+  // Token + view is the complete configuration — no URL params needed
+  return location.origin + '/embed.html?token=' + encodeURIComponent(token);
 }
 
 function buildIframeCode(url, w, h) {
@@ -1300,19 +1246,20 @@ function buildIframeCode(url, w, h) {
 }
 
 async function loadTokens() {
-  const tokens = await api('/embed/tokens');
+  const [tokens, views] = await Promise.all([api('/embed/tokens'), api('/views')]);
+  const viewMap = Object.fromEntries(views.map(v => [v.id, v.name]));
   const el = document.getElementById('tokens-list');
   if (!tokens.length) {
-    el.innerHTML = '<p style="color:var(--fog);font-size:0.85rem;padding:0.5rem 0;">No embed tokens yet. Create one above.</p>';
+    el.innerHTML = '<p style="color:var(--fog);font-size:0.85rem;padding:0.5rem 0;">No embeds yet.</p>';
     return;
   }
   el.innerHTML = tokens.map(t => {
-    const p = JSON.parse(t.params || '{}');
-    const url = buildEmbedUrl(t.token, { ...p, theme: p.theme || 'dark' });
+    const viewName = t.view_id ? (viewMap[t.view_id] || 'Deleted view') : '—';
+    const url = buildEmbedUrl(t.token);
     return `<div style="display:flex;align-items:center;gap:1rem;padding:0.9rem 1rem;margin-bottom:0.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(200,134,10,0.15);border-radius:6px;flex-wrap:wrap;">
       <div style="flex:1;min-width:150px;">
-        <div style="font-size:0.9rem;color:var(--cream);margin-bottom:0.2rem;">${escHtml(t.name)}</div>
-        <div style="font-size:0.7rem;color:var(--fog);">Mode: ${t.mode} · Used: ${t.use_count}× ${t.last_used ? '· Last: '+t.last_used.slice(0,10) : ''}</div>
+        <div style="font-size:0.9rem;color:var(--cream);margin-bottom:0.25rem;">${escHtml(t.name)}</div>
+        <div style="font-size:0.7rem;color:var(--fog);">View: ${escHtml(viewName)} · Used: ${t.use_count}× ${t.last_used ? '· Last: '+t.last_used.slice(0,10) : ''}</div>
       </div>
       <div style="font-family:monospace;font-size:0.72rem;color:var(--fog);background:rgba(0,0,0,0.3);padding:0.3rem 0.6rem;border-radius:4px;flex:2;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.token}</div>
       <div style="display:flex;gap:0.5rem;flex-shrink:0;">
@@ -1327,36 +1274,21 @@ async function loadTokens() {
 async function createToken() {
   const name    = document.getElementById('emb-name').value.trim();
   const view_id = document.getElementById('emb-view').value || null;
-  const mode    = document.getElementById('emb-mode').value;
-  if (!name) { toast('Enter a name for this embed', false); return; }
-
-  // When a saved view is linked, it owns filters/chart_type/group_by.
-  // Only store params that are view-independent (theme, show_chart, show_list)
-  // plus any explicit overrides the user set here.
-  const params = {
-    theme:      document.getElementById('emb-theme').value,
-    show_chart: document.getElementById('emb-show-chart').value,
-    show_list:  document.getElementById('emb-show-list').value,
-  };
-
-  if (!view_id) {
-    // No linked view — store all settings directly in the token
-    params.group_by   = document.getElementById('emb-groupby').value;
-    params.chart_type = document.getElementById('emb-chart').value;
-    const yf = document.getElementById('emb-year-from').value;
-    const yt = document.getElementById('emb-year-to').value;
-    if (yf) params.year_from = yf;
-    if (yt) params.year_to   = yt;
+  if (!name)    { toast('Enter a name for this embed', false); return; }
+  if (!view_id) { toast('Select a saved view', false); return; }
+  try {
+    const tok = await api('/embed/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ name, view_id })
+    });
+    toast('Embed created!');
+    document.getElementById('emb-name').value = '';
+    document.getElementById('emb-view').value = '';
+    await loadTokens();
+    showEmbedModal(tok);
+  } catch(e) {
+    toast('Error: ' + (e.message || 'unknown'), false);
   }
-
-  const tok = await api('/embed/tokens', {
-    method: 'POST',
-    body: JSON.stringify({ name, mode, view_id, params })
-  });
-  toast('Embed token created!');
-  document.getElementById('emb-name').value = '';
-  await loadTokens();
-  showEmbedModal(tok);
 }
 
 async function deleteToken(id) {
@@ -1374,15 +1306,8 @@ async function rotateToken(id) {
   showEmbedModal(tok);
 }
 
-async function showEmbedModal(tok) {
-  // Fetch the fully-resolved params (view filters merged in) for accurate preview URL
-  let resolvedParams = JSON.parse(tok.params || '{}');
-  try {
-    const resolved = await fetch('/api/embed/data?token=' + tok.token, { credentials: 'include' }).then(r => r.json());
-    if (resolved.params) resolvedParams = { ...resolvedParams, ...resolved.params };
-  } catch(e) { /* non-fatal — fall back to stored params */ }
-
-  currentEmbedUrl = buildEmbedUrl(tok.token, resolvedParams);
+function showEmbedModal(tok) {
+  currentEmbedUrl = buildEmbedUrl(tok.token);
   currentEmbedW = 600; currentEmbedH = 400;
   document.getElementById('embed-preview-url').value = currentEmbedUrl;
   document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, currentEmbedW, currentEmbedH);
@@ -1412,12 +1337,20 @@ function escHtml(s) {
 }
 
 async function loadEmbedsPage() {
-  await loadTokens();
-  // Populate saved views dropdown
   const views = await api('/views');
   const sel = document.getElementById('emb-view');
-  sel.innerHTML = '<option value="">None (use filters below)</option>' +
-    views.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+  const noViews = document.getElementById('no-views-msg');
+  const createForm = document.getElementById('embed-create-form');
+  if (!views.length) {
+    noViews.style.display = 'block';
+    createForm.style.display = 'none';
+  } else {
+    noViews.style.display = 'none';
+    createForm.style.display = 'block';
+    sel.innerHTML = '<option value="">— select a view —</option>' +
+      views.map(v => `<option value="${v.id}">${escHtml(v.name)}</option>`).join('');
+  }
+  await loadTokens();
 }
 
 

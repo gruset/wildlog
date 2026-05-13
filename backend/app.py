@@ -463,11 +463,18 @@ def create_token():
     data = request.json or {}
     if not data.get('name'):
         return jsonify({'error': 'name is required'}), 400
-    token = secrets.token_urlsafe(24)
+    view_id = data.get('view_id')
+    if not view_id:
+        return jsonify({'error': 'a saved view is required to create an embed'}), 400
+    # Verify the view exists
     conn = get_db()
+    vrow = conn.execute("SELECT id FROM saved_views WHERE id=?", (view_id,)).fetchone()
+    if not vrow:
+        conn.close()
+        return jsonify({'error': 'saved view not found'}), 404
+    token = secrets.token_urlsafe(24)
     conn.execute("INSERT INTO embed_tokens (token,name,mode,view_id,params) VALUES(?,?,?,?,?)",
-                 (token, data['name'], data.get('mode','leaderboard'),
-                  data.get('view_id'), json.dumps(data.get('params',{}))))
+                 (token, data['name'], 'leaderboard', view_id, '{}'))
     conn.commit()
     row = conn.execute("SELECT * FROM embed_tokens WHERE token=?", (token,)).fetchone()
     conn.close()
@@ -511,32 +518,20 @@ def embed_data():
     tok = validate_embed_token(token)
     if not tok:
         return jsonify({'error': 'invalid token'}), 403
-    tok_params = json.loads(tok['params'] or '{}')
-    mode       = tok['mode']
-    params     = dict(tok_params)  # start with token params (theme, show_chart, show_list etc.)
+    if not tok['view_id']:
+        return jsonify({'error': 'embed token has no linked view'}), 400
 
-    if tok['view_id']:
-        conn = get_db()
-        vrow = conn.execute("SELECT * FROM saved_views WHERE id=?", (tok['view_id'],)).fetchone()
-        conn.close()
-        if vrow:
-            view_filters = json.loads(vrow['filters'] or '{}')
-            # View owns filters, chart_type, group_by — merge over token params
-            # Token params only override if they explicitly exist AND the view doesn't set that key
-            params = {
-                **tok_params,           # base: theme, show_chart, show_list, any token-level overrides
-                **view_filters,         # view filters win (hunter_ids, species, locations, years, group_by)
-                'chart_type': vrow['chart_type'] or tok_params.get('chart_type', 'bar'),
-            }
-    # Multi-value keys use getlist(); scalar keys use get() to avoid passing lists to SQLite
-    for key in ['hunter_ids', 'species', 'locations']:
-        val = request.args.getlist(key)
-        if val:
-            params[key] = val
-    for key in ['year_from', 'year_to', 'group_by', 'chart_type']:
-        val = request.args.get(key)
-        if val:
-            params[key] = val
+    conn = get_db()
+    vrow = conn.execute("SELECT * FROM saved_views WHERE id=?", (tok['view_id'],)).fetchone()
+    conn.close()
+    if not vrow:
+        return jsonify({'error': 'linked view no longer exists'}), 404
+
+    # View is the single source of truth — no overrides
+    filters   = json.loads(vrow['filters'] or '{}')
+    params    = {**filters, 'chart_type': vrow['chart_type'] or 'bar'}
+    mode      = 'leaderboard'
+
     conditions, qparams = [], []
     if params.get('hunter_ids'):
         ids = params['hunter_ids']; conditions.append(f"g.hunter_id IN ({','.join('?'*len(ids))})"); qparams.extend(ids)
