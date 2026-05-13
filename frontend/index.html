@@ -1199,7 +1199,8 @@ async function loadViews() {
       `Chart: ${v.chart_type || 'bar'}`
     ].filter(Boolean).join('<br>');
     return `<div class="view-card" onclick="applyView(${v.id})">
-      <button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})">✕</button>
+      <button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>
+      <button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>
       <h4>${v.name}</h4>
       <div class="meta">${desc || 'No filters applied'}<br><span style="color:var(--fog);font-size:0.7rem;">${v.created_at.slice(0,10)}</span></div>
     </div>`;
@@ -1222,6 +1223,77 @@ async function applyView(id) {
     loadLeaderboard({ ...filters, chart_type: v.chart_type });
     toast(`Loaded view: ${v.name}`);
   }, 100);
+}
+
+async function openEditView(id) {
+  const views = await api('/views');
+  const v = views.find(x => x.id === id);
+  if (!v) return;
+  const f = JSON.parse(v.filters || '{}');
+
+  document.getElementById('edit-view-id').value = v.id;
+  document.getElementById('edit-view-name').value = v.name;
+  document.getElementById('edit-view-groupby').value = f.group_by || 'hunter';
+  document.getElementById('edit-view-chart').value = v.chart_type || 'bar';
+  document.getElementById('edit-view-year-from').value = f.year_from || '';
+  document.getElementById('edit-view-year-to').value   = f.year_to   || '';
+  document.getElementById('edit-view-error').textContent = '';
+
+  // Populate and pre-select multi-selects
+  const [hunterOpts, speciesOpts, locationOpts] = await Promise.all([
+    api('/hunters'), api('/stats/species'), api('/stats/locations')
+  ]);
+  const setMulti = (id, opts, selected) => {
+    const el = document.getElementById(id);
+    el.innerHTML = opts.map(o => {
+      const val = typeof o === 'string' ? o : o.id;
+      const lbl = typeof o === 'string' ? o : o.name;
+      const sel = (selected || []).includes(String(val)) ? 'selected' : '';
+      return `<option value="${val}" ${sel}>${lbl}</option>`;
+    }).join('');
+  };
+  setMulti('edit-view-hunters',   hunterOpts,   (f.hunter_ids  || []).map(String));
+  setMulti('edit-view-species',   speciesOpts,  f.species   || []);
+  setMulti('edit-view-locations', locationOpts, f.locations || []);
+
+  document.getElementById('edit-view-modal').classList.add('open');
+}
+
+async function submitEditView() {
+  const id   = document.getElementById('edit-view-id').value;
+  const name = document.getElementById('edit-view-name').value.trim();
+  const err  = document.getElementById('edit-view-error');
+  err.textContent = '';
+  if (!name) { err.textContent = 'Name is required.'; return; }
+
+  const getMulti = elId => Array.from(document.getElementById(elId).selectedOptions).map(o => o.value).filter(Boolean);
+  const filters = {
+    group_by: document.getElementById('edit-view-groupby').value,
+  };
+  const yf = document.getElementById('edit-view-year-from').value;
+  const yt = document.getElementById('edit-view-year-to').value;
+  if (yf) filters.year_from = yf;
+  if (yt) filters.year_to   = yt;
+  const hunters   = getMulti('edit-view-hunters');
+  const species   = getMulti('edit-view-species');
+  const locations = getMulti('edit-view-locations');
+  if (hunters.length)   filters.hunter_ids = hunters;
+  if (species.length)   filters.species    = species;
+  if (locations.length) filters.locations  = locations;
+
+  try {
+    await api('/views/' + id, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name,
+        filters,
+        chart_type: document.getElementById('edit-view-chart').value,
+      })
+    });
+    document.getElementById('edit-view-modal').classList.remove('open');
+    toast('View updated!');
+    loadViews();
+  } catch(e) { err.textContent = 'Error: ' + (e.message || 'unknown'); }
 }
 
 async function deleteView(id) {
@@ -1617,6 +1689,62 @@ checkAuth();
         </div>
         <button class="btn btn-primary" style="width:100%;padding:0.75rem;" onclick="doLogin()">Sign In</button>
         <div id="login-error" style="margin-top:0.75rem;color:#e07070;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EDIT VIEW MODAL ── -->
+  <div class="modal-overlay" id="edit-view-modal">
+    <div class="modal" style="max-width:560px;">
+      <h3>Edit View</h3>
+      <input type="hidden" id="edit-view-id">
+      <div class="form-grid" style="margin-bottom:1.25rem;">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>View Name *</label>
+          <input id="edit-view-name" type="text" placeholder="View name">
+        </div>
+        <div class="form-group">
+          <label>Group By</label>
+          <select id="edit-view-groupby">
+            <option value="hunter">Hunter</option>
+            <option value="species">Species</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Chart Type</label>
+          <select id="edit-view-chart">
+            <option value="bar">Bar</option>
+            <option value="horizontalBar">Horizontal Bar</option>
+            <option value="pie">Pie</option>
+            <option value="doughnut">Doughnut</option>
+            <option value="polarArea">Polar Area</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Year From</label>
+          <input id="edit-view-year-from" type="number" placeholder="e.g. 2023" min="2000" max="2099">
+        </div>
+        <div class="form-group">
+          <label>Year To</label>
+          <input id="edit-view-year-to" type="number" placeholder="e.g. 2025" min="2000" max="2099">
+        </div>
+        <div class="form-group">
+          <label>Hunters (hold Ctrl/Cmd for multiple)</label>
+          <select id="edit-view-hunters" multiple style="height:90px;"></select>
+        </div>
+        <div class="form-group">
+          <label>Species</label>
+          <select id="edit-view-species" multiple style="height:90px;"></select>
+        </div>
+        <div class="form-group">
+          <label>Locations</label>
+          <select id="edit-view-locations" multiple style="height:90px;"></select>
+        </div>
+      </div>
+      <div id="edit-view-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitEditView()">Save Changes</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-view-modal').classList.remove('open')">Cancel</button>
       </div>
     </div>
   </div>

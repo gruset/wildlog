@@ -437,6 +437,25 @@ def save_view():
     conn.close()
     return jsonify(dict(view)), 201
 
+@app.route('/api/views/<int:view_id>', methods=['PUT'])
+@admin_required
+def update_view(view_id):
+    data = request.json
+    if not data or not data.get('name'):
+        return jsonify({'error': 'Name is required'}), 400
+    conn = get_db()
+    conn.execute(
+        "UPDATE saved_views SET name=?, filters=?, chart_type=? WHERE id=?",
+        (data['name'], json.dumps(data.get('filters', {})), data.get('chart_type', 'bar'), view_id)
+    )
+    conn.commit()
+    view = conn.execute("SELECT * FROM saved_views WHERE id=?", (view_id,)).fetchone()
+    conn.close()
+    if not view:
+        return jsonify({'error': 'View not found'}), 404
+    return jsonify(dict(view))
+
+
 @app.route('/api/views/<int:view_id>', methods=['DELETE'])
 @admin_required
 def delete_view(view_id):
