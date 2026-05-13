@@ -548,8 +548,9 @@
 <div id="toast"></div>
 
 <script>
-// API URL: overridden by /config.js injected by Nginx at container start
-const API = (window.WILDLOG_API || 'http://localhost:5050') + '/api';
+// API URL: use relative path so requests go through the Nginx proxy.
+// config.js can set window.WILDLOG_API to an absolute URL for non-Docker use.
+const API = (window.WILDLOG_API || '') + '/api';
 let hunters = [], speciesList = [], locationsList = [];
 let lbChart = null, dashChart = null, speciesChart = null;
 let currentChartType = 'bar';
@@ -568,7 +569,7 @@ function toast(msg, ok=true) {
 
 async function api(path, opts={}) {
   const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) { const body = await r.text(); throw new Error(r.status + " " + body); }
   return r.json();
 }
 
@@ -874,7 +875,14 @@ async function addHunter() {
     hunters = await api('/hunters');
     await loadHunters();
     toast('Hunter added!');
-  } catch (e) { toast('Hunter already exists or error', false); }
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('409') || msg.toLowerCase().includes('already')) {
+      toast(`"${name}" already exists`, false);
+    } else {
+      toast(`Error: ${msg || 'could not reach API'}`, false);
+    }
+  }
 }
 
 // ─── SAVED VIEWS ─────────────────────────────────────────
