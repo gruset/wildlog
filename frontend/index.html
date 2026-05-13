@@ -333,7 +333,7 @@
 </head>
 <body>
 
-<header>
+<header style="display:none;">
   <div class="logo">
     <div class="logo-icon"></div>
     <h1>Wild<span>Log</span></h1>
@@ -346,10 +346,17 @@
     <button onclick="showPage('hunters')">👤 <span>Hunters</span></button>
     <button onclick="showPage('views')">🔖 <span>Saved Views</span></button>
     <button onclick="showPage('embeds')">📡 <span>Embeds</span></button>
+    <button id="nav-users" onclick="showPage('users')" style="display:none;">👥 <span>Users</span></button>
   </nav>
+  <div id="user-menu" style="display:none;align-items:center;gap:0.75rem;padding-left:1rem;border-left:1px solid rgba(200,134,10,0.2);">
+    <span id="user-badge" style="font-size:0.8rem;color:var(--fog);"></span>
+    <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="openChangePw()">🔑 Password</button>
+    <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="doLogout()">Sign Out</button>
+  </div>
+</nav>
 </header>
 
-<div class="container">
+<div class="container" style="display:none;">
 
   <!-- ── DASHBOARD ── -->
   <div id="page-dashboard" class="page active">
@@ -646,6 +653,37 @@
     </div>
   </div>
 
+
+  <!-- ── USERS ── -->
+  <div id="page-users" class="page">
+    <div class="card" style="max-width:500px;margin-bottom:1.5rem;">
+      <div class="card-title">Add User</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Username *</label>
+          <input id="new-user-username" type="text" placeholder="username">
+        </div>
+        <div class="form-group">
+          <label>Password * (min 8 chars)</label>
+          <input id="new-user-password" type="password" placeholder="Password">
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="new-user-role">
+            <option value="viewer">Viewer — read only</option>
+            <option value="admin">Admin — full access</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:1.25rem;">
+        <button class="btn btn-primary" onclick="createUser()">Add User</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">All Users</div>
+      <div class="table-wrap" id="users-table"></div>
+    </div>
+  </div>
 </div><!-- /container -->
 
 <!-- ── SAVE VIEW MODAL ── -->
@@ -666,9 +704,7 @@
 <div id="toast"></div>
 
 <script>
-// API URL: use relative path so requests go through the Nginx proxy.
-// config.js can set window.WILDLOG_API to an absolute URL for non-Docker use.
-const API = (window.WILDLOG_API || '') + '/api';
+// API base handled by auth-aware api() function below
 let hunters = [], speciesList = [], locationsList = [];
 let lbChart = null, dashChart = null, speciesChart = null;
 let currentChartType = 'bar';
@@ -685,11 +721,7 @@ function toast(msg, ok=true) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-async function api(path, opts={}) {
-  const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
-  if (!r.ok) { const body = await r.text(); throw new Error(r.status + " " + body); }
-  return r.json();
-}
+// api() defined in auth section — credentials-aware
 
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -704,6 +736,7 @@ function showPage(name) {
   if (name === 'hunters') loadHunters();
   if (name === 'views') loadViews();
   if (name === 'embeds') loadEmbedsPage();
+  if (name === 'users') loadUsersPage();
 }
 
 // ─── INIT ────────────────────────────────────────────────
@@ -1238,8 +1271,252 @@ async function loadEmbedsPage() {
     views.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
 }
 
+
+// ─── AUTH ──────────────────────────────────────────────
+let currentUser = null;
+
+async function checkAuth() {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'include' });
+    if (r.ok) {
+      const u = await r.json();
+      if (u.authenticated) {
+        currentUser = u;
+        showApp();
+        return;
+      }
+    }
+  } catch(e) {}
+  showLoginScreen();
+}
+
+function showLoginScreen() {
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.querySelector('header').style.display = 'none';
+  document.querySelector('.container').style.display = 'none';
+  setTimeout(() => document.getElementById('login-username').focus(), 100);
+}
+
+function showApp() {
+  document.getElementById('login-overlay').style.display = 'none';
+  document.querySelector('header').style.display = 'flex';
+  document.querySelector('.container').style.display = 'block';
+  // Show user badge
+  const menu = document.getElementById('user-menu');
+  menu.style.display = 'flex';
+  const roleBadge = currentUser.role === 'admin' ? ' <span style="color:var(--amber);">Admin</span>' : ' <span style="color:var(--sage);">Viewer</span>';
+  document.getElementById('user-badge').innerHTML = currentUser.username + roleBadge;
+  // Show Users nav for admins
+  if (currentUser.role === 'admin') {
+    document.getElementById('nav-users').style.display = '';
+  }
+  // Hide write-action nav items for viewers
+  applyRoleRestrictions();
+  init();
+}
+
+function applyRoleRestrictions() {
+  if (currentUser.role !== 'admin') {
+    // Viewers see dashboard, leaderboard, log and saved views but not add/hunters/embeds/users
+    document.querySelectorAll('nav button').forEach(btn => {
+      const text = btn.textContent;
+      if (text.includes('Add Entry') || text.includes('Embeds') || text.includes('Hunters')) {
+        btn.style.display = 'none';
+      }
+    });
+  }
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Enter username and password.'; return; }
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await r.json();
+    if (r.ok) {
+      currentUser = data;
+      document.getElementById('login-password').value = '';
+      showApp();
+    } else {
+      errEl.textContent = data.error || 'Login failed.';
+    }
+  } catch(e) { errEl.textContent = 'Could not reach server.'; }
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  currentUser = null;
+  // Reset UI
+  document.getElementById('user-menu').style.display = 'none';
+  document.getElementById('nav-users').style.display = 'none';
+  document.querySelectorAll('nav button').forEach(b => b.style.display = '');
+  showLoginScreen();
+}
+
+// Intercept 401s globally and redirect to login
+const _origApi = window._origApi;
+async function api(path, opts={}) {
+  const r = await fetch('/api' + path, {
+    headers: {'Content-Type':'application/json'},
+    credentials: 'include', ...opts
+  });
+  if (r.status === 401) { showLoginScreen(); throw new Error('401'); }
+  if (!r.ok) { const body = await r.text(); throw new Error(r.status + ' ' + body); }
+  return r.json();
+}
+
+// Password change
+function openChangePw() {
+  document.getElementById('new-pw-input').value = '';
+  document.getElementById('new-pw-confirm').value = '';
+  document.getElementById('pw-change-error').textContent = '';
+  document.getElementById('change-pw-modal').classList.add('open');
+}
+
+async function submitPasswordChange() {
+  const pw  = document.getElementById('new-pw-input').value;
+  const pw2 = document.getElementById('new-pw-confirm').value;
+  const err = document.getElementById('pw-change-error');
+  err.textContent = '';
+  if (pw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+  if (pw !== pw2)    { err.textContent = 'Passwords do not match.'; return; }
+  try {
+    await api('/users/' + currentUser.id + '/password', {
+      method: 'POST', body: JSON.stringify({password: pw})
+    });
+    // Need to expose user id on currentUser — patch me() call
+    document.getElementById('change-pw-modal').classList.remove('open');
+    toast('Password updated!');
+  } catch(e) { err.textContent = 'Error: ' + (e.message || 'unknown'); }
+}
+
+// ─── USERS PAGE ──────────────────────────────────────────
+async function loadUsersPage() {
+  const users = await api('/users');
+  document.getElementById('users-table').innerHTML = renderUsersTable(users);
+}
+
+function renderUsersTable(users) {
+  if (!users.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No users.</p>';
+  const isSelf = u => u.username === currentUser.username;
+  return `<table>
+    <thead><tr><th>Username</th><th>Role</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
+    <tbody>${users.map(u => `<tr>
+      <td>${escHtml(u.username)}${isSelf(u) ? ' <span style="color:var(--amber);font-size:0.72rem;">(you)</span>' : ''}</td>
+      <td>
+        <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) ? 'disabled' : ''}
+          style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;">
+          <option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>
+          <option value="admin"  ${u.role==='admin' ?'selected':''}>Admin</option>
+        </select>
+      </td>
+      <td style="color:var(--fog);font-size:0.82rem;">${u.last_login ? u.last_login.slice(0,16) : '—'}</td>
+      <td style="color:var(--fog);font-size:0.82rem;">${u.created_at.slice(0,10)}</td>
+      <td><button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;"
+        onclick="deleteUser(${u.id},'${escHtml(u.username)}')" ${isSelf(u)?'disabled':''}>✕</button></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function createUser() {
+  const username = document.getElementById('new-user-username').value.trim();
+  const password = document.getElementById('new-user-password').value;
+  const role     = document.getElementById('new-user-role').value;
+  if (!username || !password) { toast('Username and password required', false); return; }
+  try {
+    await api('/users', { method: 'POST', body: JSON.stringify({username, password, role}) });
+    document.getElementById('new-user-username').value = '';
+    document.getElementById('new-user-password').value = '';
+    toast('User created!');
+    loadUsersPage();
+  } catch(e) {
+    const msg = e.message || '';
+    toast(msg.includes('409') ? 'Username already exists' : 'Error: ' + msg, false);
+  }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  try {
+    await api('/users/' + id, { method: 'DELETE' });
+    toast('User deleted');
+    loadUsersPage();
+  } catch(e) { toast('Error deleting user', false); }
+}
+
+async function changeRole(id, role) {
+  try {
+    await api('/users/' + id + '/role', { method: 'POST', body: JSON.stringify({role}) });
+    toast('Role updated');
+  } catch(e) { toast('Error updating role', false); loadUsersPage(); }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // ─── START ───────────────────────────────────────────────
-init();
+checkAuth();
 </script>
+
+  <!-- ── LOGIN OVERLAY ── -->
+  <div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:1000;
+    background:linear-gradient(135deg,#0d1a0d 0%,#1a0e05 100%);
+    align-items:center;justify-content:center;">
+    <div style="width:100%;max-width:380px;padding:2rem;">
+      <div style="text-align:center;margin-bottom:2rem;">
+        <div style="width:52px;height:52px;background:var(--amber);
+          clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+          margin:0 auto 1rem;"></div>
+        <h1 style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:900;color:var(--cream);">
+          Wild<span style="color:var(--gold);">Log</span>
+        </h1>
+        <p style="color:var(--fog);font-size:0.85rem;margin-top:0.25rem;">Hunting Game Tracker</p>
+      </div>
+      <div style="background:rgba(250,245,236,0.04);border:1px solid rgba(200,134,10,0.25);
+        border-radius:10px;padding:1.75rem;">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>Username</label>
+          <input id="login-username" type="text" placeholder="Username" autocomplete="username"
+            onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div class="form-group" style="margin-bottom:1.5rem;">
+          <label>Password</label>
+          <input id="login-password" type="password" placeholder="Password" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:0.75rem;" onclick="doLogin()">Sign In</button>
+        <div id="login-error" style="margin-top:0.75rem;color:#e07070;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHANGE PASSWORD MODAL ── -->
+  <div class="modal-overlay" id="change-pw-modal">
+    <div class="modal" style="max-width:400px;">
+      <h3>Change Password</h3>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label>New Password (min 8 chars)</label>
+        <input id="new-pw-input" type="password" placeholder="New password">
+      </div>
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label>Confirm Password</label>
+        <input id="new-pw-confirm" type="password" placeholder="Confirm password">
+      </div>
+      <div id="pw-change-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitPasswordChange()">Update Password</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('change-pw-modal').classList.remove('open')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
