@@ -1325,22 +1325,29 @@ async function loadTokens() {
 }
 
 async function createToken() {
-  const name = document.getElementById('emb-name').value.trim();
+  const name    = document.getElementById('emb-name').value.trim();
+  const view_id = document.getElementById('emb-view').value || null;
+  const mode    = document.getElementById('emb-mode').value;
   if (!name) { toast('Enter a name for this embed', false); return; }
+
+  // When a saved view is linked, it owns filters/chart_type/group_by.
+  // Only store params that are view-independent (theme, show_chart, show_list)
+  // plus any explicit overrides the user set here.
   const params = {
-    group_by:   document.getElementById('emb-groupby').value,
-    chart_type: document.getElementById('emb-chart').value,
     theme:      document.getElementById('emb-theme').value,
     show_chart: document.getElementById('emb-show-chart').value,
     show_list:  document.getElementById('emb-show-list').value,
   };
-  const yf = document.getElementById('emb-year-from').value;
-  const yt = document.getElementById('emb-year-to').value;
-  if (yf) params.year_from = yf;
-  if (yt) params.year_to = yt;
 
-  const view_id = document.getElementById('emb-view').value || null;
-  const mode    = document.getElementById('emb-mode').value;
+  if (!view_id) {
+    // No linked view — store all settings directly in the token
+    params.group_by   = document.getElementById('emb-groupby').value;
+    params.chart_type = document.getElementById('emb-chart').value;
+    const yf = document.getElementById('emb-year-from').value;
+    const yt = document.getElementById('emb-year-to').value;
+    if (yf) params.year_from = yf;
+    if (yt) params.year_to   = yt;
+  }
 
   const tok = await api('/embed/tokens', {
     method: 'POST',
@@ -1367,9 +1374,15 @@ async function rotateToken(id) {
   showEmbedModal(tok);
 }
 
-function showEmbedModal(tok) {
-  const p = JSON.parse(tok.params || '{}');
-  currentEmbedUrl = buildEmbedUrl(tok.token, p);
+async function showEmbedModal(tok) {
+  // Fetch the fully-resolved params (view filters merged in) for accurate preview URL
+  let resolvedParams = JSON.parse(tok.params || '{}');
+  try {
+    const resolved = await fetch('/api/embed/data?token=' + tok.token, { credentials: 'include' }).then(r => r.json());
+    if (resolved.params) resolvedParams = { ...resolvedParams, ...resolved.params };
+  } catch(e) { /* non-fatal — fall back to stored params */ }
+
+  currentEmbedUrl = buildEmbedUrl(tok.token, resolvedParams);
   currentEmbedW = 600; currentEmbedH = 400;
   document.getElementById('embed-preview-url').value = currentEmbedUrl;
   document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, currentEmbedW, currentEmbedH);

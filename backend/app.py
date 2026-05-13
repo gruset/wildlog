@@ -511,17 +511,23 @@ def embed_data():
     tok = validate_embed_token(token)
     if not tok:
         return jsonify({'error': 'invalid token'}), 403
-    params = json.loads(tok['params'] or '{}')
-    mode   = tok['mode']
+    tok_params = json.loads(tok['params'] or '{}')
+    mode       = tok['mode']
+    params     = dict(tok_params)  # start with token params (theme, show_chart, show_list etc.)
+
     if tok['view_id']:
         conn = get_db()
         vrow = conn.execute("SELECT * FROM saved_views WHERE id=?", (tok['view_id'],)).fetchone()
         conn.close()
         if vrow:
             view_filters = json.loads(vrow['filters'] or '{}')
-            params = {**view_filters, **params}
-            if not params.get('chart_type'):
-                params['chart_type'] = vrow['chart_type']
+            # View owns filters, chart_type, group_by — merge over token params
+            # Token params only override if they explicitly exist AND the view doesn't set that key
+            params = {
+                **tok_params,           # base: theme, show_chart, show_list, any token-level overrides
+                **view_filters,         # view filters win (hunter_ids, species, locations, years, group_by)
+                'chart_type': vrow['chart_type'] or tok_params.get('chart_type', 'bar'),
+            }
     for key in ['hunter_ids','species','locations','year_from','year_to','group_by','chart_type']:
         val = request.args.getlist(key) or request.args.get(key)
         if val:
