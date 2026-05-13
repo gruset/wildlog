@@ -4,9 +4,23 @@ import sqlite3
 import os
 import json
 from datetime import datetime
+import secrets
+import hashlib
 
 app = Flask(__name__)
 CORS(app, origins=os.environ.get('CORS_ORIGINS', '*').split(','))
+
+def cors_public(f):
+    """Decorator: allow any origin for public embed endpoints."""
+    from functools import wraps
+    from flask import make_response
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        resp = make_response(f(*args, **kwargs))
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['X-Frame-Options'] = 'ALLOWALL'
+        return resp
+    return decorated
 
 # DB lives in a mounted volume in production
 DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'data', 'hunting.db'))
@@ -39,6 +53,18 @@ def init_db():
             notes TEXT,
             created_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (hunter_id) REFERENCES hunters(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS embed_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'leaderboard',
+            view_id INTEGER,
+            params TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            last_used TEXT,
+            use_count INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS saved_views (
@@ -248,6 +274,154 @@ def delete_view(view_id):
     conn.close()
     return jsonify({'success': True})
 
+
+
+# ── Embed tokens ──────────────────────────────────────────
+
+@app.route('/api/embed/tokens', methods=['GET'])
+def get_tokens():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM embed_tokens ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/embed/tokens', methods=['POST'])
+def create_token():
+    data = request.json or {}
+    if not data.get('name'):
+        return jsonify({'error': 'name is required'}), 400
+    token = secrets.token_urlsafe(24)
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO embed_tokens (token, name, mode, view_id, params) VALUES (?,?,?,?,?)",
+        (token, data['name'], data.get('mode', 'leaderboard'),
+         data.get('view_id'), json.dumps(data.get('params', {})))
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM embed_tokens WHERE token=?", (token,)).fetchone()
+    conn.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route('/api/embed/tokens/<int:token_id>', methods=['DELETE'])
+def delete_token(token_id):
+    conn = get_db()
+    conn.execute("DELETE FROM embed_tokens WHERE id=?", (token_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/embed/tokens/<int:token_id>/rotate', methods=['POST'])
+def rotate_token(token_id):
+    new_token = secrets.token_urlsafe(24)
+    conn = get_db()
+    conn.execute("UPDATE embed_tokens SET token=? WHERE id=?", (new_token, token_id))
+    conn.commit()
+    row = conn.execute("SELECT * FROM embed_tokens WHERE id=?", (token_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(dict(row))
+
+
+def validate_token(token):
+    """Returns token row or None. Updates use stats."""
+    if not token:
+        return None
+    conn = get_db()
+    row = conn.execute("SELECT * FROM embed_tokens WHERE token=?", (token,)).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE embed_tokens SET last_used=datetime('now'), use_count=use_count+1 WHERE token=?",
+            (token,)
+        )
+        conn.commit()
+    conn.close()
+    return row
+
+
+@app.route('/api/embed/data')
+@cors_public
+def embed_data():
+    """Single endpoint the embed page calls. Validates token, returns all needed data."""
+    token = request.args.get('token')
+    tok = validate_token(token)
+    if not tok:
+        return jsonify({'error': 'invalid token'}), 403
+
+    params = json.loads(tok['params'] or '{}')
+    mode = tok['mode']
+
+    # If linked to a saved view, merge its filters
+    if tok['view_id']:
+        conn = get_db()
+        vrow = conn.execute("SELECT * FROM saved_views WHERE id=?", (tok['view_id'],)).fetchone()
+        conn.close()
+        if vrow:
+            view_filters = json.loads(vrow['filters'] or '{}')
+            params = {**view_filters, **params}
+            if not params.get('chart_type'):
+                params['chart_type'] = vrow['chart_type']
+
+    # URL param overrides (species, hunter_ids, etc. passed directly on embed URL)
+    for key in ['hunter_ids', 'species', 'locations', 'year_from', 'year_to', 'group_by', 'chart_type']:
+        val = request.args.getlist(key) or request.args.get(key)
+        if val:
+            params[key] = val
+
+    result = {
+        'mode': mode,
+        'params': params,
+        'token_name': tok['name'],
+    }
+
+    # Leaderboard data
+    conditions, qparams = [], []
+    if params.get('hunter_ids'):
+        ids = params['hunter_ids']
+        conditions.append(f"g.hunter_id IN ({','.join('?'*len(ids))})")
+        qparams.extend(ids)
+    if params.get('species'):
+        sp = params['species']
+        conditions.append(f"g.species IN ({','.join('?'*len(sp))})")
+        qparams.extend(sp)
+    if params.get('locations'):
+        locs = params['locations']
+        conditions.append(f"g.location IN ({','.join('?'*len(locs))})")
+        qparams.extend(locs)
+    if params.get('year_from'):
+        conditions.append("strftime('%Y', g.hunt_date) >= ?"); qparams.append(params['year_from'])
+    if params.get('year_to'):
+        conditions.append("strftime('%Y', g.hunt_date) <= ?"); qparams.append(params['year_to'])
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    group_by = params.get('group_by', 'hunter')
+
+    if group_by == 'species':
+        q = f"SELECT g.species as label, SUM(g.count) as total FROM game_log g JOIN hunters h ON g.hunter_id=h.id {where} GROUP BY g.species ORDER BY total DESC"
+    else:
+        q = f"SELECT h.name as label, SUM(g.count) as total, h.id as hunter_id FROM game_log g JOIN hunters h ON g.hunter_id=h.id {where} GROUP BY g.hunter_id ORDER BY total DESC"
+
+    conn = get_db()
+    leaderboard = [dict(r) for r in conn.execute(q, qparams).fetchall()]
+
+    stats = {}
+    if mode in ('dashboard',):
+        total_game = conn.execute("SELECT SUM(count) FROM game_log").fetchone()[0] or 0
+        n_hunters  = conn.execute("SELECT COUNT(*) FROM hunters").fetchone()[0]
+        n_species  = conn.execute("SELECT COUNT(DISTINCT species) FROM game_log").fetchone()[0]
+        by_species = [dict(r) for r in conn.execute(
+            "SELECT species as label, SUM(count) as total FROM game_log GROUP BY species ORDER BY total DESC"
+        ).fetchall()]
+        stats = {'total_game': total_game, 'n_hunters': n_hunters,
+                 'n_species': n_species, 'by_species': by_species}
+    conn.close()
+
+    result['leaderboard'] = leaderboard
+    result['stats'] = stats
+    return jsonify(result)
 
 # ── Entry point ───────────────────────────────────────────
 if __name__ == '__main__':

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WildLog Embed</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Serif+4:wght@300;400;600&display=swap');
+
+  :root {
+    --forest: #1a2e1a;
+    --bark:   #2d1e0f;
+    --moss:   #3d5a3e;
+    --sage:   #7a9e7e;
+    --amber:  #c8860a;
+    --gold:   #e8b84b;
+    --cream:  #f5ede0;
+    --fog:    #d4c9b8;
+    --bg: var(--forest);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Source Serif 4', Georgia, serif;
+    background: transparent;
+    color: var(--cream);
+    overflow: hidden; /* iframe — no scrollbars */
+  }
+
+  /* Theme: dark (default) | light | transparent */
+  body.theme-light {
+    --bg: #f5ede0; --cream: #1a2e1a; --fog: #5a4a3a; --forest: #f5ede0;
+    background: #f5ede0;
+  }
+  body.theme-transparent { background: transparent !important; }
+
+  .wrap {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 10% 0%, rgba(61,90,62,0.3) 0%, transparent 60%),
+      radial-gradient(ellipse at 90% 100%, rgba(45,30,15,0.4) 0%, transparent 60%);
+    display: flex; flex-direction: column;
+    padding: 1rem 1.25rem 0.75rem;
+    gap: 0.75rem;
+  }
+  body.theme-light .wrap { background-image: none; background: #faf5ec; }
+  body.theme-transparent .wrap { background: transparent; }
+
+  /* Header */
+  .embed-header {
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(200,134,10,0.3);
+    padding-bottom: 0.6rem; flex-shrink: 0;
+  }
+  .embed-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem; font-weight: 700;
+    color: var(--gold); letter-spacing: 0.03em;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .embed-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--amber); flex-shrink: 0;
+  }
+  .embed-meta { font-size: 0.7rem; color: var(--fog); letter-spacing: 0.05em; }
+
+  /* Stats row */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem;
+    flex-shrink: 0;
+  }
+  .stat-box {
+    background: rgba(61,90,62,0.2);
+    border: 1px solid rgba(200,134,10,0.2);
+    border-radius: 6px; padding: 0.6rem 0.75rem;
+    text-align: center;
+  }
+  body.theme-light .stat-box { background: rgba(61,90,62,0.08); }
+  .stat-box .val {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem; font-weight: 900;
+    color: var(--gold); line-height: 1;
+  }
+  .stat-box .lbl {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--fog); margin-top: 0.2rem;
+  }
+
+  /* Chart */
+  .chart-wrap { flex: 1; min-height: 0; position: relative; }
+
+  /* Leaderboard list */
+  .lb-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .lb-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.45rem 0.5rem; margin-bottom: 0.3rem;
+    border-radius: 5px; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(200,134,10,0.1);
+  }
+  body.theme-light .lb-row { background: rgba(0,0,0,0.03); border-color: rgba(200,134,10,0.15); }
+  .lb-rank { font-family: 'Playfair Display', serif; font-size: 1rem; width: 1.6rem; text-align: center; flex-shrink: 0; }
+  .lb-name { flex: 1; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-bar-wrap { flex: 2; background: rgba(255,255,255,0.07); border-radius: 20px; height: 7px; overflow: hidden; }
+  body.theme-light .lb-bar-wrap { background: rgba(0,0,0,0.1); }
+  .lb-bar { height: 100%; background: linear-gradient(90deg, var(--amber), var(--gold)); border-radius: 20px; transition: width 1s cubic-bezier(.16,1,.3,1); width: 0; }
+  .lb-count { font-family: 'Playfair Display', serif; font-size: 0.9rem; color: var(--gold); min-width: 2rem; text-align: right; flex-shrink: 0; }
+
+  /* Error / loading */
+  .center { display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; gap: 0.75rem; }
+  .error-icon { font-size: 2rem; }
+  .error-msg { font-size: 0.85rem; color: var(--fog); text-align: center; }
+
+  /* Footer branding */
+  .embed-footer {
+    flex-shrink: 0; text-align: right;
+    font-size: 0.6rem; color: rgba(212,201,184,0.4);
+    letter-spacing: 0.08em; padding-top: 0.3rem;
+  }
+
+  /* Scrollbar styling */
+  .lb-list::-webkit-scrollbar { width: 4px; }
+  .lb-list::-webkit-scrollbar-track { background: transparent; }
+  .lb-list::-webkit-scrollbar-thumb { background: rgba(200,134,10,0.3); border-radius: 2px; }
+
+  @media (max-width: 400px) {
+    .lb-bar-wrap { display: none; }
+    .stats-row { grid-template-columns: repeat(3,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="wrap">
+  <div class="center" id="loading">
+    <div class="error-icon">🦌</div>
+    <div class="error-msg">Loading…</div>
+  </div>
+</div>
+
+<script src="/config.js"></script>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const token     = params.get('token');
+  const theme     = params.get('theme') || 'dark';        // dark | light | transparent
+  const showList  = params.get('list') !== 'false';        // show ranked list (default true)
+  const showChart = params.get('chart') !== 'false';       // show chart (default true)
+  const showStats = params.get('stats') !== 'false';       // show stats (only dashboard mode)
+  const title     = params.get('title');                   // custom title override
+  const chartOverride = params.get('chart_type');          // override chart type
+
+  document.body.classList.add('theme-' + theme);
+
+  if (!token) { showError('No token provided.'); return; }
+
+  const API_BASE = (window.WILDLOG_API || '') + '/api';
+
+  // Build data URL — pass through any extra filter params from the iframe URL
+  const dataUrl = new URL(API_BASE + '/embed/data', location.origin);
+  dataUrl.searchParams.set('token', token);
+  ['hunter_ids','species','locations','year_from','year_to','group_by','chart_type'].forEach(k => {
+    params.getAll(k).forEach(v => dataUrl.searchParams.append(k, v));
+  });
+
+  fetch(dataUrl)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch(e => showError(e.message === '403' ? 'Invalid or expired token.' : 'Could not load data.'));
+
+  function render(data) {
+    const wrap = document.getElementById('wrap');
+    const mode = data.mode;
+    const lb   = data.leaderboard || [];
+    const p    = data.params || {};
+    const chartType = chartOverride || p.chart_type || 'bar';
+    const displayTitle = title || data.token_name || 'WildLog';
+
+    let html = `
+      <div class="embed-header">
+        <div class="embed-title"><span class="dot"></span>${escHtml(displayTitle)}</div>
+        <div class="embed-meta">${mode === 'dashboard' ? 'Dashboard' : (p.group_by === 'species' ? 'By Species' : 'Top Hunters')}</div>
+      </div>`;
+
+    // Stats (dashboard only)
+    if (mode === 'dashboard' && showStats && data.stats) {
+      const s = data.stats;
+      html += `<div class="stats-row">
+        <div class="stat-box"><div class="val">${s.total_game}</div><div class="lbl">Total</div></div>
+        <div class="stat-box"><div class="val">${s.n_hunters}</div><div class="lbl">Hunters</div></div>
+        <div class="stat-box"><div class="val">${s.n_species}</div><div class="lbl">Species</div></div>
+      </div>`;
+    }
+
+    // Chart
+    if (showChart && lb.length) {
+      html += `<div class="chart-wrap"><canvas id="embed-chart"></canvas></div>`;
+    }
+
+    // Ranked list
+    if (showList && lb.length) {
+      const medals = ['🥇','🥈','🥉'];
+      const max = lb[0].total || 1;
+      html += `<div class="lb-list">` + lb.map((r,i) => `
+        <div class="lb-row">
+          <span class="lb-rank">${medals[i] || (i+1)}</span>
+          <span class="lb-name">${escHtml(r.label)}</span>
+          <div class="lb-bar-wrap"><div class="lb-bar" data-pct="${(r.total/max*100).toFixed(1)}"></div></div>
+          <span class="lb-count">${r.total}</span>
+        </div>`).join('') + `</div>`;
+    }
+
+    if (!lb.length) {
+      html += `<div class="center"><div class="error-msg">No data for the selected filters.</div></div>`;
+    }
+
+    html += `<div class="embed-footer">WILDLOG</div>`;
+    wrap.innerHTML = html;
+
+    // Animate bars after paint
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.lb-bar[data-pct]').forEach(el => {
+        el.style.width = el.dataset.pct + '%';
+      });
+    });
+
+    // Draw chart
+    if (showChart && lb.length) {
+      const palette = ['#c8860a','#7a9e7e','#8b6a4a','#4a7a8a','#9a7a4a','#6a8a4a','#8a4a6a','#4a6a8a'];
+      const labels = lb.map(r => r.label);
+      const values = lb.map(r => r.total);
+      const bgColors = labels.map((_,i) => palette[i%palette.length] + 'cc');
+      const bdColors = labels.map((_,i) => palette[i%palette.length]);
+      const isRadial = ['pie','doughnut','polarArea'].includes(chartType);
+      const isHBar   = chartType === 'horizontalBar';
+      const cType    = isHBar ? 'bar' : chartType;
+      const textColor = theme === 'light' ? '#2d1e0f' : '#d4c9b8';
+
+      new Chart(document.getElementById('embed-chart'), {
+        type: cType,
+        data: { labels, datasets: [{ label: 'Game', data: values, backgroundColor: bgColors, borderColor: isRadial ? 'transparent' : bdColors, borderWidth: 2, borderRadius: cType === 'bar' ? 3 : 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          indexAxis: isHBar ? 'y' : 'x',
+          animation: { duration: 800, easing: 'easeOutQuart' },
+          plugins: {
+            legend: { display: isRadial, labels: { color: textColor, font: { family: "'Source Serif 4'", size: 11 }, boxWidth: 12 } },
+            tooltip: { backgroundColor: '#1a0e05', borderColor: '#c8860a', borderWidth: 1, titleColor: '#e8b84b', bodyColor: '#f5ede0' }
+          },
+          scales: isRadial ? {} : {
+            x: { ticks: { color: textColor, font: { family: "'Source Serif 4'", size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: textColor, font: { family: "'Source Serif 4'", size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+          }
+        }
+      });
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('wrap').innerHTML = `
+      <div class="center">
+        <div class="error-icon">🔒</div>
+        <div class="error-msg">${escHtml(msg)}</div>
+      </div>`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>
+</body>
+</html>

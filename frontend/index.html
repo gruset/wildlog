@@ -345,6 +345,7 @@
     <button onclick="showPage('add')">➕ <span>Add Entry</span></button>
     <button onclick="showPage('hunters')">👤 <span>Hunters</span></button>
     <button onclick="showPage('views')">🔖 <span>Saved Views</span></button>
+    <button onclick="showPage('embeds')">📡 <span>Embeds</span></button>
   </nav>
 </header>
 
@@ -528,6 +529,123 @@
     <div class="views-grid" id="views-grid"></div>
   </div>
 
+
+  <!-- ── EMBEDS ── -->
+  <div id="page-embeds" class="page">
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="card-title">Create Embed Token</div>
+      <div class="form-grid" id="embed-form">
+        <div class="form-group">
+          <label>Name *</label>
+          <input id="emb-name" type="text" placeholder="e.g. Club Website — Moose 2024">
+        </div>
+        <div class="form-group">
+          <label>Mode</label>
+          <select id="emb-mode">
+            <option value="leaderboard">Leaderboard</option>
+            <option value="dashboard">Dashboard</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Link to Saved View</label>
+          <select id="emb-view">
+            <option value="">None (use filters below)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Group By</label>
+          <select id="emb-groupby">
+            <option value="hunter">Hunter</option>
+            <option value="species">Species</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Chart Type</label>
+          <select id="emb-chart">
+            <option value="bar">Bar</option>
+            <option value="horizontalBar">Horizontal Bar</option>
+            <option value="pie">Pie</option>
+            <option value="doughnut">Doughnut</option>
+            <option value="polarArea">Polar Area</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Theme</label>
+          <select id="emb-theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="transparent">Transparent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Show Chart</label>
+          <select id="emb-show-chart">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Show Ranked List</label>
+          <select id="emb-show-list">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Year From</label>
+          <input id="emb-year-from" type="number" placeholder="e.g. 2024" min="2000" max="2099">
+        </div>
+        <div class="form-group">
+          <label>Year To</label>
+          <input id="emb-year-to" type="number" placeholder="e.g. 2025" min="2000" max="2099">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:1.25rem;">
+        <button class="btn btn-primary" onclick="createToken()">Generate Embed Token</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Active Embed Tokens</div>
+      <div id="tokens-list" style="margin-top:0.5rem;"></div>
+    </div>
+  </div>
+
+  <!-- Embed code modal -->
+  <div class="modal-overlay" id="embed-modal">
+    <div class="modal" style="max-width:620px;">
+      <h3>📡 Embed Code</h3>
+      <p style="font-size:0.82rem;color:var(--fog);margin-bottom:1rem;">
+        Copy this snippet into any website. The token grants read-only access — rotate or delete it here if needed.
+      </p>
+      <div style="margin-bottom:1rem;">
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">Preview URL</label>
+        <div style="display:flex;gap:0.5rem;">
+          <input id="embed-preview-url" readonly style="flex:1;background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--fog);padding:0.5rem 0.75rem;font-size:0.78rem;font-family:monospace;">
+          <button class="btn btn-ghost" onclick="openPreview()">Open ↗</button>
+        </div>
+      </div>
+      <div style="margin-bottom:1rem;">
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">iframe Code</label>
+        <textarea id="embed-code" readonly rows="4"
+          style="width:100%;background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.6rem 0.8rem;font-size:0.78rem;font-family:monospace;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:1rem;">
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.5rem;">Iframe Size</label>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(480,320)">480×320</button>
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(600,400)">600×400</button>
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(800,500)">800×500</button>
+          <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize('100%',400)">Full width</button>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="copyEmbedCode()">Copy Code</button>
+        <button class="btn btn-ghost" onclick="closeEmbedModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /container -->
 
 <!-- ── SAVE VIEW MODAL ── -->
@@ -585,6 +703,7 @@ function showPage(name) {
   if (name === 'add') populateAddForm();
   if (name === 'hunters') loadHunters();
   if (name === 'views') loadViews();
+  if (name === 'embeds') loadEmbedsPage();
 }
 
 // ─── INIT ────────────────────────────────────────────────
@@ -977,6 +1096,146 @@ async function deleteView(id) {
   await api('/views/' + id, { method: 'DELETE' });
   toast('View deleted');
   loadViews();
+}
+
+
+// ─── EMBEDS ──────────────────────────────────────────────
+let currentEmbedUrl = '';
+let currentEmbedW = 600, currentEmbedH = 400;
+
+function buildEmbedUrl(token, opts = {}) {
+  const base = location.origin + '/embed.html';
+  const p = new URLSearchParams({ token });
+  if (opts.theme && opts.theme !== 'dark')   p.set('theme', opts.theme);
+  if (opts.group_by)                          p.set('group_by', opts.group_by);
+  if (opts.chart_type)                        p.set('chart_type', opts.chart_type);
+  if (opts.show_chart === 'false')            p.set('chart', 'false');
+  if (opts.show_list  === 'false')            p.set('list', 'false');
+  if (opts.year_from)                         p.set('year_from', opts.year_from);
+  if (opts.year_to)                           p.set('year_to', opts.year_to);
+  if (opts.title)                             p.set('title', opts.title);
+  return base + '?' + p.toString();
+}
+
+function buildIframeCode(url, w, h) {
+  const width  = typeof w === 'number' ? w + 'px' : w;
+  const height = typeof h === 'number' ? h + 'px' : h;
+  return `<iframe
+  src="${url}"
+  width="${width}" height="${height}"
+  frameborder="0"
+  scrolling="no"
+  style="border-radius:8px;overflow:hidden;"
+  title="WildLog Leaderboard"
+></iframe>`;
+}
+
+async function loadTokens() {
+  const tokens = await api('/embed/tokens');
+  const el = document.getElementById('tokens-list');
+  if (!tokens.length) {
+    el.innerHTML = '<p style="color:var(--fog);font-size:0.85rem;padding:0.5rem 0;">No embed tokens yet. Create one above.</p>';
+    return;
+  }
+  el.innerHTML = tokens.map(t => {
+    const p = JSON.parse(t.params || '{}');
+    const url = buildEmbedUrl(t.token, { ...p, theme: p.theme || 'dark' });
+    return `<div style="display:flex;align-items:center;gap:1rem;padding:0.9rem 1rem;margin-bottom:0.5rem;background:rgba(255,255,255,0.03);border:1px solid rgba(200,134,10,0.15);border-radius:6px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:150px;">
+        <div style="font-size:0.9rem;color:var(--cream);margin-bottom:0.2rem;">${escHtml(t.name)}</div>
+        <div style="font-size:0.7rem;color:var(--fog);">Mode: ${t.mode} · Used: ${t.use_count}× ${t.last_used ? '· Last: '+t.last_used.slice(0,10) : ''}</div>
+      </div>
+      <div style="font-family:monospace;font-size:0.72rem;color:var(--fog);background:rgba(0,0,0,0.3);padding:0.3rem 0.6rem;border-radius:4px;flex:2;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.token}</div>
+      <div style="display:flex;gap:0.5rem;flex-shrink:0;">
+        <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick='showEmbedModal(${JSON.stringify(t)})'>&#60;/&#62; Code</button>
+        <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="rotateToken(${t.id})">↺ Rotate</button>
+        <button class="btn btn-danger" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="deleteToken(${t.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function createToken() {
+  const name = document.getElementById('emb-name').value.trim();
+  if (!name) { toast('Enter a name for this embed', false); return; }
+  const params = {
+    group_by:   document.getElementById('emb-groupby').value,
+    chart_type: document.getElementById('emb-chart').value,
+    theme:      document.getElementById('emb-theme').value,
+    show_chart: document.getElementById('emb-show-chart').value,
+    show_list:  document.getElementById('emb-show-list').value,
+  };
+  const yf = document.getElementById('emb-year-from').value;
+  const yt = document.getElementById('emb-year-to').value;
+  if (yf) params.year_from = yf;
+  if (yt) params.year_to = yt;
+
+  const view_id = document.getElementById('emb-view').value || null;
+  const mode    = document.getElementById('emb-mode').value;
+
+  const tok = await api('/embed/tokens', {
+    method: 'POST',
+    body: JSON.stringify({ name, mode, view_id, params })
+  });
+  toast('Embed token created!');
+  document.getElementById('emb-name').value = '';
+  await loadTokens();
+  showEmbedModal(tok);
+}
+
+async function deleteToken(id) {
+  if (!confirm('Delete this embed token? The iframe will stop working.')) return;
+  await api('/embed/tokens/' + id, { method: 'DELETE' });
+  toast('Token deleted');
+  loadTokens();
+}
+
+async function rotateToken(id) {
+  if (!confirm('Rotate token? The old iframe code will stop working — you will need to update it.')) return;
+  const tok = await api('/embed/tokens/' + id + '/rotate', { method: 'POST' });
+  toast('Token rotated — update your iframe code');
+  await loadTokens();
+  showEmbedModal(tok);
+}
+
+function showEmbedModal(tok) {
+  const p = JSON.parse(tok.params || '{}');
+  currentEmbedUrl = buildEmbedUrl(tok.token, p);
+  currentEmbedW = 600; currentEmbedH = 400;
+  document.getElementById('embed-preview-url').value = currentEmbedUrl;
+  document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, currentEmbedW, currentEmbedH);
+  document.getElementById('embed-modal').classList.add('open');
+}
+
+function closeEmbedModal() {
+  document.getElementById('embed-modal').classList.remove('open');
+}
+
+function setEmbedSize(w, h) {
+  currentEmbedW = w; currentEmbedH = h;
+  document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, w, h);
+}
+
+function openPreview() {
+  window.open(currentEmbedUrl, '_blank');
+}
+
+function copyEmbedCode() {
+  const code = document.getElementById('embed-code').value;
+  navigator.clipboard.writeText(code).then(() => toast('Copied to clipboard!'));
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadEmbedsPage() {
+  await loadTokens();
+  // Populate saved views dropdown
+  const views = await api('/views');
+  const sel = document.getElementById('emb-view');
+  sel.innerHTML = '<option value="">None (use filters below)</option>' +
+    views.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
 }
 
 // ─── START ───────────────────────────────────────────────

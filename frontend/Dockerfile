@@ -2,8 +2,9 @@ FROM nginx:1.27-alpine
 
 # Build context is the project root (set in docker-compose.yml)
 COPY frontend/index.html /usr/share/nginx/html/index.html
+COPY frontend/embed.html /usr/share/nginx/html/embed.html
 
-# Copy Nginx config and entrypoint
+# Nginx config and entrypoint
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY nginx/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
