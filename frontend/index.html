@@ -596,6 +596,15 @@
           style="width:100%;background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.6rem 0.8rem;font-size:0.78rem;font-family:monospace;resize:vertical;"></textarea>
       </div>
       <div style="margin-bottom:1rem;">
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">Theme</label>
+        <select id="embed-theme-select" onchange="refreshEmbedModal()"
+          style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.5rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="transparent">Transparent</option>
+        </select>
+      </div>
+      <div style="margin-bottom:1rem;">
         <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.5rem;">Iframe Size</label>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(480,320)">480×320</button>
@@ -1225,11 +1234,14 @@ async function deleteView(id) {
 
 // ─── EMBEDS ──────────────────────────────────────────────
 let currentEmbedUrl = '';
+let currentEmbedToken = '';
 let currentEmbedW = 600, currentEmbedH = 400;
 
-function buildEmbedUrl(token) {
-  // Token + view is the complete configuration — no URL params needed
-  return location.origin + '/embed.html?token=' + encodeURIComponent(token);
+function buildEmbedUrl(token, theme) {
+  // Data comes entirely from the view — theme is the only visual override
+  let url = location.origin + '/embed.html?token=' + encodeURIComponent(token);
+  if (theme && theme !== 'dark') url += '&theme=' + encodeURIComponent(theme);
+  return url;
 }
 
 function buildIframeCode(url, w, h) {
@@ -1307,11 +1319,17 @@ async function rotateToken(id) {
 }
 
 function showEmbedModal(tok) {
-  currentEmbedUrl = buildEmbedUrl(tok.token);
+  currentEmbedToken = tok.token;
   currentEmbedW = 600; currentEmbedH = 400;
+  refreshEmbedModal();
+  document.getElementById('embed-modal').classList.add('open');
+}
+
+function refreshEmbedModal() {
+  const theme = document.getElementById('embed-theme-select')?.value || 'dark';
+  currentEmbedUrl = buildEmbedUrl(currentEmbedToken, theme);
   document.getElementById('embed-preview-url').value = currentEmbedUrl;
   document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, currentEmbedW, currentEmbedH);
-  document.getElementById('embed-modal').classList.add('open');
 }
 
 function closeEmbedModal() {
@@ -1320,7 +1338,7 @@ function closeEmbedModal() {
 
 function setEmbedSize(w, h) {
   currentEmbedW = w; currentEmbedH = h;
-  document.getElementById('embed-code').value = buildIframeCode(currentEmbedUrl, w, h);
+  refreshEmbedModal();
 }
 
 function openPreview() {

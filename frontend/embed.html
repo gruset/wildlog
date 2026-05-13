@@ -146,8 +146,12 @@
 (() => {
   const urlParams = new URLSearchParams(location.search);
   const token = urlParams.get('token');
+  const theme = urlParams.get('theme') || 'dark';  // dark | light | transparent — visual only
 
   if (!token) { showError('No token provided.'); return; }
+
+  document.body.classList.remove('theme-dark', 'theme-light', 'theme-transparent');
+  document.body.classList.add('theme-' + theme);
 
   const API_BASE = (window.WILDLOG_API || '') + '/api';
   const dataUrl  = API_BASE + '/embed/data?token=' + encodeURIComponent(token);
