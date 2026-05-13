@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Database — never commit the live DB
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+
+# Environment
+.env
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db

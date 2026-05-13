@@ -1,0 +1,52 @@
+services:
+
+  # ── Flask API ────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wildlog-api
+    restart: unless-stopped
+    environment:
+      DB_PATH: /app/data/hunting.db
+      FLASK_DEBUG: "false"
+      # Restrict CORS to your domain in production, e.g.:
+      # CORS_ORIGINS: "https://hunting.yourdomain.com"
+      CORS_ORIGINS: "*"
+    volumes:
+      - wildlog-data:/app/data   # persistent SQLite DB
+    networks:
+      - wildlog-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Nginx + HTML frontend ────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: wildlog-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"   # set WEB_PORT in .env to change the host port
+    environment:
+      # Leave empty to use the Nginx proxy (recommended).
+      # Set to a full URL only if the frontend is served from a different host.
+      API_URL: ""
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - wildlog-net
+
+volumes:
+  wildlog-data:
+    driver: local
+
+networks:
+  wildlog-net:
+    driver: bridge
