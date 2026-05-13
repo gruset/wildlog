@@ -158,7 +158,7 @@ def login():
         session['user_id']  = user['id']
         session['username'] = user['username']
         session['role']     = user['role']
-        return jsonify({'username': user['username'], 'role': user['role']})
+        return jsonify({'id': user['id'], 'username': user['username'], 'role': user['role']})
     conn.close()
     return jsonify({'error': 'Invalid username or password'}), 401
 

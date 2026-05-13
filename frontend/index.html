@@ -1297,7 +1297,7 @@ function showLoginScreen() {
   setTimeout(() => document.getElementById('login-username').focus(), 100);
 }
 
-function showApp() {
+async function showApp() {
   document.getElementById('login-overlay').style.display = 'none';
   document.querySelector('header').style.display = 'flex';
   document.querySelector('.container').style.display = 'block';
@@ -1312,7 +1312,7 @@ function showApp() {
   }
   // Hide write-action nav items for viewers
   applyRoleRestrictions();
-  init();
+  await init();
 }
 
 function applyRoleRestrictions() {
@@ -1343,7 +1343,9 @@ async function doLogin() {
     if (r.ok) {
       currentUser = data;
       document.getElementById('login-password').value = '';
-      showApp();
+      // Yield to event loop so the Set-Cookie header is applied before init() fires
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await showApp();
     } else {
       errEl.textContent = data.error || 'Login failed.';
     }
