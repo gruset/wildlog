@@ -382,10 +382,23 @@ def delete_hunter(hunter_id):
 @login_required
 def get_game():
     conn = get_db()
-    rows = conn.execute('''
-        SELECT g.*, h.name as hunter_name FROM game_log g
-        JOIN hunters h ON g.hunter_id=h.id ORDER BY g.hunt_date DESC
-    ''').fetchall()
+    if session.get('role') == 'user':
+        # Users see only their own linked hunter's entries
+        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        hunter_id = user['hunter_id'] if user else None
+        if hunter_id:
+            rows = conn.execute('''
+                SELECT g.*, h.name as hunter_name FROM game_log g
+                JOIN hunters h ON g.hunter_id=h.id
+                WHERE g.hunter_id=? ORDER BY g.hunt_date DESC
+            ''', (hunter_id,)).fetchall()
+        else:
+            rows = []
+    else:
+        rows = conn.execute('''
+            SELECT g.*, h.name as hunter_name FROM game_log g
+            JOIN hunters h ON g.hunter_id=h.id ORDER BY g.hunt_date DESC
+        ''').fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -417,9 +430,20 @@ def add_game():
     return jsonify({'success': True}), 201
 
 @app.route('/api/game/<int:game_id>', methods=['DELETE'])
-@admin_required
+@user_or_admin_required
 def delete_game(game_id):
     conn = get_db()
+    if session.get('role') == 'user':
+        # Verify the entry belongs to the user's linked hunter
+        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        hunter_id = user['hunter_id'] if user else None
+        entry = conn.execute("SELECT hunter_id FROM game_log WHERE id=?", (game_id,)).fetchone()
+        if not entry:
+            conn.close()
+            return jsonify({'error': 'Entry not found'}), 404
+        if not hunter_id or entry['hunter_id'] != hunter_id:
+            conn.close()
+            return jsonify({'error': 'You can only delete your own entries'}), 403
     conn.execute("DELETE FROM game_log WHERE id=?", (game_id,))
     conn.commit()
     conn.close()

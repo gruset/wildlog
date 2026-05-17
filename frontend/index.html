@@ -701,7 +701,12 @@ function showPage(name) {
     b.classList.toggle('active', names[i] === name);
   });
   if (name === 'leaderboard') loadLeaderboard();
-  if (name === 'log') loadLog();
+  if (name === 'log') {
+    // Hide hunter filter for 'user' role — they only see their own entries
+    const hunterFilterGroup = document.getElementById('log-hunter-filter').closest('.filter-group');
+    if (hunterFilterGroup) hunterFilterGroup.style.display = currentUser.role === 'user' ? 'none' : '';
+    loadLog();
+  }
   if (name === 'add') {
     populateAddForm();
     const notice = document.getElementById('user-hunter-notice');
@@ -1066,8 +1071,15 @@ function filterLog() {
   if (speciesVal) entries = entries.filter(e => e.species === speciesVal);
   if (search) entries = entries.filter(e => (e.location||'').toLowerCase().includes(search) || (e.notes||'').toLowerCase().includes(search));
 
+  const canDelete = currentUser.role === 'admin' || currentUser.role === 'user';
   document.getElementById('log-table').innerHTML = renderTable(
-    entries.map(g => ({ _id: g.id, Hunter: g.hunter_name, Species: `<span class="badge">${g.species}</span>`, Count: g.count, Date: g.hunt_date, Location: g.location||'—', Notes: g.notes||'—' }))
+    entries.map(g => ({
+      _id: canDelete ? g.id : null,
+      Hunter: g.hunter_name,
+      Species: `<span class="badge">${g.species}</span>`,
+      Count: g.count, Date: g.hunt_date,
+      Location: g.location||'—', Notes: g.notes||'—'
+    }))
   );
 }
 
