@@ -389,11 +389,11 @@
   <button class="burger" id="burger-btn" onclick="toggleNav()" aria-label="Menu">
     <span></span><span></span><span></span>
   </button>
-  <div class="logo" onclick="showPage('dashboard');closeNav();" style="cursor:pointer;">
+  <div class="logo" onclick="showPage('dashboard');closeNav();" style="cursor:pointer;margin-right:auto;">
     <div class="logo-icon"></div>
     <h1>Wild<span>Log</span></h1>
   </div>
-  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;margin-left:auto;max-width:220px;">
+  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;max-width:220px;">
     <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;">Association</label>
     <select id="site-assoc-select" onchange="setSiteAssociation(this.value)"
       style="background:rgba(10,8,5,0.6);border:1px solid rgba(200,134,10,0.35);border-radius:4px;
@@ -1847,12 +1847,31 @@ async function setSiteAssociation(assocId) {
 async function loadAssocSelector() {
   const assocs = await api('/associations');
   const sel = document.getElementById('site-assoc-select');
-  sel.innerHTML = '<option value="">All associations</option>' +
-    assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
-  // Show selector if user has >1 association or is admin with any associations
-  const show = currentUser.role === 'admin' ? assocs.length > 0 : assocs.length > 1;
+  const isAdmin = currentUser.role === 'admin';
+
+  if (isAdmin) {
+    // Admin: "All associations" + every association
+    sel.innerHTML = '<option value="">All associations</option>' +
+      assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+  } else {
+    // Non-admin: no "All" option, just their associations
+    // Auto-select their only one if they have exactly 1, or restore session selection
+    const activeId = currentUser.site_assoc_id || (assocs.length === 1 ? assocs[0].id : null);
+    sel.innerHTML = assocs.map(a =>
+      `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`
+    ).join('');
+    // Auto-set session to their only association if not already set
+    if (assocs.length === 1 && !currentUser.site_assoc_id) {
+      await api('/session/association', { method: 'POST', body: JSON.stringify({ association_id: assocs[0].id }) });
+      currentUser.site_assoc_id = assocs[0].id;
+    }
+  }
+
+  // Show for admins with ≥1 assoc, and for non-admins with ≥1 assoc (they always need context)
+  const show = assocs.length > 0;
   document.getElementById('assoc-selector').style.display = show ? 'flex' : 'none';
-  currentAssocId = currentUser.site_assoc_id || null;
+  currentAssocId = currentUser.site_assoc_id || (assocs.length ? assocs[0].id : null);
+  if (!isAdmin && !currentAssocId && assocs.length) currentAssocId = assocs[0].id;
 }
 
 // ─── AUTH ──────────────────────────────────────────────
