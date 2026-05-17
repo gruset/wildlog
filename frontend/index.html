@@ -1818,12 +1818,11 @@ document.addEventListener('click', e => {
 });
 
 // ─── ASSOCIATION STATE ───────────────────────────────
-let currentAssocId = null;  // null = all / site-wide filter
+let currentAssocId = undefined;  // undefined = not yet initialised; null = "all"; number = specific assoc
 
 function assocParam() {
-  // Returns query string fragment to append to API calls
-  const id = currentAssocId || currentUser?.site_assoc_id;
-  return id ? `association_id=${id}` : '';
+  // Only append if a specific association is chosen (null and undefined both mean "no filter")
+  return currentAssocId ? `association_id=${currentAssocId}` : '';
 }
 
 function apiWithAssoc(path) {
@@ -1835,13 +1834,14 @@ function apiWithAssoc(path) {
 async function setSiteAssociation(assocId) {
   const id = assocId ? parseInt(assocId) : null;
   await api('/session/association', { method: 'POST', body: JSON.stringify({ association_id: id }) });
-  currentAssocId = id;
+  currentAssocId = id;             // null = "all", number = specific — never falls back
   currentUser.site_assoc_id = id;
-  // Reload all current data
-  await init();
+  await init();                    // re-fetches hunters/species/locations with new filter
   const page = document.querySelector('.page.active')?.id?.replace('page-','');
-  if (page === 'leaderboard') loadLeaderboard(currentFilters);
-  if (page === 'log') loadLog();
+  if (page === 'dashboard')    loadDashboard();
+  if (page === 'leaderboard')  loadLeaderboard(currentFilters);
+  if (page === 'log')          loadLog();
+  if (page === 'hunters')      loadHunters();
 }
 
 async function loadAssocSelector() {
@@ -1867,11 +1867,24 @@ async function loadAssocSelector() {
     }
   }
 
-  // Show for admins with ≥1 assoc, and for non-admins with ≥1 assoc (they always need context)
+  // Show for admins with ≥1 assoc, and for non-admins with ≥1 assoc
   const show = assocs.length > 0;
   document.getElementById('assoc-selector').style.display = show ? 'flex' : 'none';
-  currentAssocId = currentUser.site_assoc_id || (assocs.length ? assocs[0].id : null);
-  if (!isAdmin && !currentAssocId && assocs.length) currentAssocId = assocs[0].id;
+
+  // Initialise currentAssocId only on first load (undefined); after that it owns itself
+  if (currentAssocId === undefined) {
+    if (isAdmin) {
+      currentAssocId = currentUser.site_assoc_id || null;
+    } else {
+      // Non-admin: use session value, or auto-pick their only association
+      currentAssocId = currentUser.site_assoc_id ||
+        (assocs.length === 1 ? assocs[0].id : null);
+    }
+  }
+
+  // Sync the dropdown to currentAssocId
+  const sel2 = document.getElementById('site-assoc-select');
+  sel2.value = currentAssocId || '';
 }
 
 // ─── AUTH ──────────────────────────────────────────────
