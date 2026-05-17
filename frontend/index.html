@@ -1554,7 +1554,11 @@ async function showApp() {
   // Show user badge
   const menu = document.getElementById('user-menu');
   menu.style.display = 'flex';
-  const roleBadge = currentUser.role === 'admin' ? ' <span style="color:var(--amber);">Admin</span>' : ' <span style="color:var(--sage);">Viewer</span>';
+  const roleColors = { admin: 'var(--amber)', user: '#7abeae', viewer: 'var(--sage)' };
+  const roleLabels = { admin: 'Admin', user: 'User', viewer: 'Viewer' };
+  const roleColor = roleColors[currentUser.role] || 'var(--sage)';
+  const roleLabel = roleLabels[currentUser.role] || currentUser.role;
+  const roleBadge = ` <span style="color:${roleColor};">${roleLabel}</span>`;
   document.getElementById('user-badge').innerHTML = currentUser.username + roleBadge;
   // Show Users nav for admins
   if (currentUser.role === 'admin') {
