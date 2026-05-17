@@ -757,7 +757,7 @@ function toast(msg, ok=true) {
 
 // api() defined in auth section — credentials-aware
 
-function showPage(name) {
+async function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('nav button').forEach((b,i) => {
