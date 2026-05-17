@@ -529,13 +529,21 @@
 
   <!-- ── HUNTERS ── -->
   <div id="page-hunters" class="page">
-    <div class="card" style="max-width:500px; margin-bottom:1.5rem;">
+    <div class="card" style="max-width:600px; margin-bottom:1.5rem;">
       <div class="card-title">Add Hunter</div>
-      <div style="display:flex; gap:0.75rem;">
-        <div class="form-group" style="flex:1">
-          <input id="new-hunter-name" type="text" placeholder="Hunter name…">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name *</label>
+          <input id="new-hunter-name" type="text" placeholder="Hunter name…"
+            onkeydown="if(event.key==='Enter')addHunter()">
         </div>
-        <button class="btn btn-primary" style="align-self:flex-end" onclick="addHunter()">Add</button>
+        <div class="form-group" id="new-hunter-assoc-group" style="display:none;">
+          <label>Associations</label>
+          <select id="new-hunter-assocs" multiple style="height:80px;"></select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="addHunter()">Add Hunter</button>
       </div>
     </div>
     <div class="card">
@@ -658,6 +666,10 @@
             <option value="user">User — can log own game</option>
             <option value="admin">Admin — full access</option>
           </select>
+        </div>
+        <div class="form-group" id="new-user-assoc-group" style="display:none;">
+          <label>Associations</label>
+          <select id="new-user-assocs" multiple style="height:80px;"></select>
         </div>
       </div>
       <div class="btn-row" style="margin-top:1.25rem;">
@@ -1221,23 +1233,43 @@ function clearForm() {
 
 // ─── HUNTERS ─────────────────────────────────────────────
 async function loadHunters() {
-  hunters = await api(apiWithAssoc('/hunters'));
-  const stats = await api(apiWithAssoc('/stats/leaderboard'));
+  [hunters] = await Promise.all([api(apiWithAssoc('/hunters'))]);
+  const [stats, allAssocs] = await Promise.all([
+    api(apiWithAssoc('/stats/leaderboard')),
+    api('/associations')
+  ]);
   const totals = Object.fromEntries(stats.map(r => [r.hunter_id, r.total]));
 
-  document.getElementById('hunters-table').innerHTML = renderHuntersTable(hunters, totals);
+  // Populate association selects on the form (show only if associations exist)
+  const hasAssocs = allAssocs.length > 0;
+  ['new-hunter-assoc-group','edit-hunter-assoc-group'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = hasAssocs ? '' : 'none';
+  });
+  ['new-hunter-assocs','edit-hunter-assocs'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = allAssocs.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join('');
+  });
+
+  document.getElementById('hunters-table').innerHTML = renderHuntersTable(hunters, totals, allAssocs);
   populateFilterDropdowns();
 }
 
 async function addHunter() {
   const name = document.getElementById('new-hunter-name').value.trim();
   if (!name) return;
+  const assocIds = Array.from(document.getElementById('new-hunter-assocs').selectedOptions).map(o => parseInt(o.value));
   try {
-    await api('/hunters', { method: 'POST', body: JSON.stringify({ name }) });
+    const hunter = await api('/hunters', { method: 'POST', body: JSON.stringify({ name }) });
+    if (assocIds.length) {
+      await api('/hunters/' + hunter.id + '/associations', { method: 'POST', body: JSON.stringify({ association_ids: assocIds }) });
+    }
     document.getElementById('new-hunter-name').value = '';
+    Array.from(document.getElementById('new-hunter-assocs').options).forEach(o => o.selected = false);
     hunters = await api('/hunters');
     await loadHunters();
     toast('Hunter added!');
+    await loadAssocSelector();
   } catch (e) {
     const msg = e.message || '';
     if (msg.includes('409') || msg.toLowerCase().includes('already')) {
@@ -1248,26 +1280,37 @@ async function addHunter() {
   }
 }
 
-function renderHuntersTable(hunters, totals) {
+function renderHuntersTable(hunters, totals, allAssocs) {
   if (!hunters.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No hunters yet.</p>';
+  const hasAssocs = allAssocs && allAssocs.length > 0;
   return `<table>
-    <thead><tr><th>Name</th><th>Total Game</th><th>Member Since</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Total Game</th>${hasAssocs ? '<th>Associations</th>' : ''}<th>Member Since</th><th></th></tr></thead>
     <tbody>${hunters.map(h => `<tr>
       <td>${escHtml(h.name)}</td>
       <td>${totals[h.id] || 0}</td>
+      ${hasAssocs ? `<td style="font-size:0.8rem;color:var(--fog);">${h.associations || '<span style="color:rgba(255,255,255,0.2);">—</span>'}</td>` : ''}
       <td style="color:var(--fog);font-size:0.85rem;">${h.created_at.slice(0,10)}</td>
       <td style="display:flex;gap:0.4rem;">
-        <button class="btn btn-ghost" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openEditHunter(${h.id},'${escHtml(h.name)}')">✎</button>
+        <button class="btn btn-ghost" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openEditHunter(${h.id})">✎</button>
         <button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deleteHunter(${h.id})">✕</button>
       </td>
     </tr>`).join('')}</tbody>
   </table>`;
 }
 
-function openEditHunter(id, currentName) {
-  document.getElementById('edit-hunter-id').value = id;
-  document.getElementById('edit-hunter-name').value = currentName;
+async function openEditHunter(id) {
+  const hunter = hunters.find(h => h.id === id);
+  if (!hunter) return;
+  document.getElementById('edit-hunter-id').value   = id;
+  document.getElementById('edit-hunter-name').value = hunter.name;
   document.getElementById('edit-hunter-error').textContent = '';
+
+  // Pre-select current associations
+  const currentAssocs = await api('/hunters/' + id + '/associations');
+  const currentIds    = new Set(currentAssocs.map(a => a.id));
+  const sel = document.getElementById('edit-hunter-assocs');
+  Array.from(sel.options).forEach(o => { o.selected = currentIds.has(parseInt(o.value)); });
+
   document.getElementById('edit-hunter-modal').classList.add('open');
   setTimeout(() => document.getElementById('edit-hunter-name').select(), 50);
 }
@@ -1278,13 +1321,16 @@ async function submitEditHunter() {
   const err  = document.getElementById('edit-hunter-error');
   err.textContent = '';
   if (!name) { err.textContent = 'Name is required.'; return; }
+  const assocIds = Array.from(document.getElementById('edit-hunter-assocs').selectedOptions).map(o => parseInt(o.value));
   try {
     await api('/hunters/' + id, { method: 'PUT', body: JSON.stringify({ name }) });
+    await api('/hunters/' + id + '/associations', { method: 'POST', body: JSON.stringify({ association_ids: assocIds }) });
     document.getElementById('edit-hunter-modal').classList.remove('open');
     toast('Hunter updated!');
     hunters = await api('/hunters');
     await loadHunters();
     populateFilterDropdowns();
+    await loadAssocSelector();
   } catch(e) {
     const msg = e.message || '';
     err.textContent = msg.includes('409') ? 'A hunter with that name already exists.' : 'Error: ' + msg;
@@ -1841,16 +1887,32 @@ async function submitPasswordChange() {
 
 // ─── USERS PAGE ──────────────────────────────────────────
 async function loadUsersPage() {
-  const [users, hunterList] = await Promise.all([api('/users'), api('/hunters')]);
+  const [users, hunterList, allAssocs] = await Promise.all([api('/users'), api('/hunters'), api('/associations')]);
   const hunterMap = Object.fromEntries(hunterList.map(h => [h.id, h.name]));
-  document.getElementById('users-table').innerHTML = renderUsersTable(users, hunterMap);
+
+  // Fetch associations for each user
+  const userAssocMap = {};
+  await Promise.all(users.map(async u => {
+    const assocs = await api('/users/' + u.id + '/associations');
+    userAssocMap[u.id] = assocs.map(a => a.name).join(', ');
+  }));
+
+  // Populate association select on add-user form
+  const hasAssocs = allAssocs.length > 0;
+  const newAssocGroup = document.getElementById('new-user-assoc-group');
+  if (newAssocGroup) newAssocGroup.style.display = hasAssocs ? '' : 'none';
+  const newAssocSel = document.getElementById('new-user-assocs');
+  if (newAssocSel) newAssocSel.innerHTML = allAssocs.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join('');
+
+  document.getElementById('users-table').innerHTML = renderUsersTable(users, hunterMap, userAssocMap, allAssocs);
 }
 
-function renderUsersTable(users, hunterMap) {
+function renderUsersTable(users, hunterMap, userAssocMap, allAssocs) {
   if (!users.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No users.</p>';
-  const isSelf = u => u.username === currentUser.username;
+  const isSelf    = u => u.username === currentUser.username;
+  const hasAssocs = allAssocs && allAssocs.length > 0;
   return `<table>
-    <thead><tr><th>Username</th><th>Role</th><th>Linked Hunter</th><th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>Role</th><th>Linked Hunter</th>${hasAssocs ? '<th>Associations</th>' : ''}<th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
     <tbody>${users.map(u => `<tr style="${u.disabled ? 'opacity:0.5;' : ''}">
       <td>${escHtml(u.username)}${isSelf(u) ? ' <span style="color:var(--amber);font-size:0.72rem;">(you)</span>' : ''}</td>
       <td>
@@ -1870,6 +1932,13 @@ function renderUsersTable(users, hunterMap) {
           ).join('')}
         </select>
       </td>
+      ${hasAssocs ? `<td style="font-size:0.8rem;color:var(--fog);">
+        <span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;"
+          onclick="openEditUserAssocs(${u.id},'${escHtml(u.username)}')"
+          title="Click to edit associations">
+          ${userAssocMap[u.id] || '<span style=\"color:rgba(255,255,255,0.2)\">—</span>'}
+        </span>
+      </td>` : ''}
       <td>
         ${isSelf(u)
           ? '<span style="color:var(--sage);font-size:0.78rem;">Active</span>'
@@ -1901,12 +1970,18 @@ async function createUser() {
   const password = document.getElementById('new-user-password').value;
   const role     = document.getElementById('new-user-role').value;
   if (!username || !password) { toast('Username and password required', false); return; }
+  const assocIds = Array.from(document.getElementById('new-user-assocs').selectedOptions).map(o => parseInt(o.value));
   try {
-    await api('/users', { method: 'POST', body: JSON.stringify({username, password, role}) });
+    const user = await api('/users', { method: 'POST', body: JSON.stringify({username, password, role}) });
+    if (assocIds.length) {
+      await api('/users/' + user.id + '/associations', { method: 'POST', body: JSON.stringify({ association_ids: assocIds }) });
+    }
     document.getElementById('new-user-username').value = '';
     document.getElementById('new-user-password').value = '';
+    Array.from(document.getElementById('new-user-assocs').options).forEach(o => o.selected = false);
     toast('User created!');
-    loadUsersPage();
+    await loadUsersPage();
+    await loadAssocSelector();
   } catch(e) {
     const msg = e.message || '';
     toast(msg.includes('409') ? 'Username already exists' : 'Error: ' + msg, false);
@@ -1930,6 +2005,34 @@ async function linkHunter(userId, hunterId) {
     });
     toast('Hunter link updated');
   } catch(e) { toast('Error linking hunter', false); loadUsersPage(); }
+}
+
+
+async function openEditUserAssocs(userId, username) {
+  const [allAssocs, currentAssocs] = await Promise.all([
+    api('/associations'),
+    api('/users/' + userId + '/associations')
+  ]);
+  const currentIds = new Set(currentAssocs.map(a => a.id));
+  document.getElementById('edit-user-assocs-id').value   = userId;
+  document.getElementById('edit-user-assocs-name').textContent = username;
+  const sel = document.getElementById('edit-user-assocs-select');
+  sel.innerHTML = allAssocs.map(a =>
+    `<option value="${a.id}" ${currentIds.has(a.id) ? 'selected' : ''}>${escHtml(a.name)}</option>`
+  ).join('');
+  document.getElementById('edit-user-assocs-modal').classList.add('open');
+}
+
+async function submitUserAssocs() {
+  const userId   = document.getElementById('edit-user-assocs-id').value;
+  const assocIds = Array.from(document.getElementById('edit-user-assocs-select').selectedOptions).map(o => parseInt(o.value));
+  try {
+    await api('/users/' + userId + '/associations', { method: 'POST', body: JSON.stringify({ association_ids: assocIds }) });
+    document.getElementById('edit-user-assocs-modal').classList.remove('open');
+    toast('Associations updated!');
+    await loadUsersPage();
+    await loadAssocSelector();
+  } catch(e) { toast('Error: ' + (e.message || 'unknown'), false); }
 }
 
 async function changeRole(id, role) {
@@ -2088,15 +2191,37 @@ checkAuth();
     </div>
   </div>
 
-  <!-- ── EDIT HUNTER MODAL ── -->
+  
+  <!-- ── EDIT USER ASSOCIATIONS MODAL ── -->
+  <div class="modal-overlay" id="edit-user-assocs-modal">
+    <div class="modal" style="max-width:420px;">
+      <h3>Associations for <span id="edit-user-assocs-name" style="color:var(--gold);"></span></h3>
+      <input type="hidden" id="edit-user-assocs-id">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label>Associations (hold Ctrl/Cmd for multiple)</label>
+        <select id="edit-user-assocs-select" multiple style="height:120px;"></select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitUserAssocs()">Save</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-user-assocs-modal').classList.remove('open')">Cancel</button>
+      </div>
+    </div>
+  </div>
+<!-- ── EDIT HUNTER MODAL ── -->
   <div class="modal-overlay" id="edit-hunter-modal">
     <div class="modal" style="max-width:380px;">
       <h3>Edit Hunter</h3>
       <input type="hidden" id="edit-hunter-id">
-      <div class="form-group" style="margin-bottom:1.25rem;">
-        <label>Name *</label>
-        <input id="edit-hunter-name" type="text" placeholder="Hunter name"
-          onkeydown="if(event.key==='Enter')submitEditHunter()">
+      <div class="form-grid" style="margin-bottom:1.25rem;">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>Name *</label>
+          <input id="edit-hunter-name" type="text" placeholder="Hunter name"
+            onkeydown="if(event.key==='Enter')submitEditHunter()">
+        </div>
+        <div class="form-group" id="edit-hunter-assoc-group" style="grid-column:1/-1;display:none;">
+          <label>Associations (hold Ctrl/Cmd for multiple)</label>
+          <select id="edit-hunter-assocs" multiple style="height:100px;"></select>
+        </div>
       </div>
       <div id="edit-hunter-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
       <div class="btn-row">

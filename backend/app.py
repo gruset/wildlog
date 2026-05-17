@@ -507,6 +507,64 @@ def set_session_association():
     session['site_assoc_id'] = assoc_id
     return jsonify({'success': True, 'association_id': assoc_id})
 
+
+@app.route('/api/hunters/<int:hunter_id>/associations', methods=['GET'])
+@login_required
+def get_hunter_associations(hunter_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT a.* FROM associations a "
+        "JOIN hunter_associations ha ON ha.association_id=a.id "
+        "WHERE ha.hunter_id=? ORDER BY a.name",
+        (hunter_id,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/hunters/<int:hunter_id>/associations', methods=['POST'])
+@admin_required
+def set_hunter_associations(hunter_id):
+    data = request.json or {}
+    assoc_ids = data.get('association_ids', [])
+    conn = get_db()
+    conn.execute("DELETE FROM hunter_associations WHERE hunter_id=?", (hunter_id,))
+    for aid in assoc_ids:
+        conn.execute("INSERT OR IGNORE INTO hunter_associations (hunter_id,association_id) VALUES (?,?)",
+                     (hunter_id, aid))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/users/<int:user_id>/associations', methods=['GET'])
+@login_required
+def get_user_associations(user_id):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT a.* FROM associations a "
+        "JOIN user_associations ua ON ua.association_id=a.id "
+        "WHERE ua.user_id=? ORDER BY a.name",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/users/<int:user_id>/associations', methods=['POST'])
+@admin_required
+def set_user_associations(user_id):
+    data = request.json or {}
+    assoc_ids = data.get('association_ids', [])
+    conn = get_db()
+    conn.execute("DELETE FROM user_associations WHERE user_id=?", (user_id,))
+    for aid in assoc_ids:
+        conn.execute("INSERT OR IGNORE INTO user_associations (user_id,association_id) VALUES (?,?)",
+                     (user_id, aid))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
 # ── Health ────────────────────────────────────────────────
 
 @app.route('/api/health')
