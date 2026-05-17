@@ -394,15 +394,15 @@
     <div class="logo-icon"></div>
     <h1>Wild<span>Log</span></h1>
   </div>
-  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;max-width:220px;">
-    <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;"><label data-i18n="assoc_label" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;">Association</label>
+  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;margin-left:auto;max-width:220px;min-width:0;">
+    <label data-i18n="assoc_label" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;">Association</label>
     <select id="site-assoc-select" onchange="setSiteAssociation(this.value)"
       style="background:rgba(10,8,5,0.6);border:1px solid rgba(200,134,10,0.35);border-radius:4px;
         color:var(--cream);padding:0.3rem 0.6rem;font-family:inherit;font-size:0.82rem;min-width:0;flex:1;">
       <option value="">All associations</option>
     </select>
   </div>
-  <div id="user-menu" style="display:none;align-items:center;gap:0.5rem;">
+  <div id="user-menu" style="display:none;align-items:center;gap:0.5rem;flex-shrink:0;">
     <span id="user-badge" style="font-size:0.78rem;color:var(--fog);white-space:nowrap;"></span>
     <button class="burger" onclick="toggleUserMenu()" id="user-menu-btn" aria-label="User menu" style="flex-direction:row;gap:0;padding:0.5rem;">
       <span style="font-size:1.2rem;line-height:1;">👤</span>
