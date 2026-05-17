@@ -348,8 +348,17 @@
     <button onclick="showPage('views')">🔖 <span>Saved Views</span></button>
     <button onclick="showPage('embeds')">📡 <span>Embeds</span></button>
     <button id="nav-users" onclick="showPage('users')" style="display:none;">👥 <span>Users</span></button>
+    <button id="nav-assoc" onclick="showPage('associations')" style="display:none;">🏕 <span>Associations</span></button>
   </nav>
-  <div id="user-menu" style="display:none;align-items:center;gap:0.75rem;padding-left:1rem;border-left:1px solid rgba(200,134,10,0.2);">
+  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;padding:0 0.75rem;">
+    <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;">Association</label>
+    <select id="site-assoc-select" onchange="setSiteAssociation(this.value)"
+      style="background:rgba(10,8,5,0.6);border:1px solid rgba(200,134,10,0.35);border-radius:4px;
+        color:var(--cream);padding:0.3rem 0.6rem;font-family:inherit;font-size:0.82rem;max-width:160px;">
+      <option value="">All associations</option>
+    </select>
+  </div>
+  <div id="user-menu"  style="display:none;align-items:center;gap:0.75rem;padding-left:1rem;border-left:1px solid rgba(200,134,10,0.2);">
     <span id="user-badge" style="font-size:0.8rem;color:var(--fog);"></span>
     <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="openChangePw()">🔑 Password</button>
     <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="doLogout()">Sign Out</button>
@@ -473,6 +482,13 @@
 
   <!-- ── ADD ENTRY ── -->
   <div id="page-add" class="page">
+    <div id="add-assoc-notice" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(45,30,15,0.4);border:1px solid rgba(200,134,10,0.2);border-radius:6px;">
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);margin-bottom:0.4rem;">Association context</div>
+      <select id="add-assoc-select" style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.4rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
+        <option value="">All / no filter</option>
+      </select>
+      <div style="font-size:0.75rem;color:var(--fog);margin-top:0.4rem;">This entry will be attributed to the hunter's association(s), not filtered by this selection. Use this for your own reference.</div>
+    </div>
     <div id="user-hunter-notice" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(61,90,62,0.2);border:1px solid rgba(122,158,126,0.3);border-radius:6px;font-size:0.85rem;color:var(--sage);"></div>
     <div class="card" style="max-width:700px;">
       <div class="card-title">Add Game Entry</div>
@@ -653,6 +669,48 @@
       <div class="table-wrap" id="users-table"></div>
     </div>
   </div>
+
+  <!-- ── ASSOCIATIONS ── -->
+  <div id="page-associations" class="page">
+    <div class="card" style="max-width:500px;margin-bottom:1.5rem;">
+      <div class="card-title">Create Association</div>
+      <div style="display:flex;gap:0.75rem;">
+        <div class="form-group" style="flex:1">
+          <input id="new-assoc-name" type="text" placeholder="e.g. North Ridge Hunters"
+            onkeydown="if(event.key==='Enter')createAssociation()">
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-end" onclick="createAssociation()">Create</button>
+      </div>
+    </div>
+    <div id="assoc-list"></div>
+  </div>
+
+  <!-- ── EDIT ASSOCIATION MODAL ── -->
+  <div class="modal-overlay" id="edit-assoc-modal">
+    <div class="modal" style="max-width:560px;">
+      <h3>Edit Association</h3>
+      <input type="hidden" id="edit-assoc-id">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label>Name *</label>
+        <input id="edit-assoc-name" type="text" onkeydown="if(event.key==='Enter')submitEditAssoc()">
+      </div>
+      <div class="form-grid" style="margin-bottom:1.25rem;">
+        <div class="form-group">
+          <label>Hunters (hold Ctrl/Cmd for multiple)</label>
+          <select id="edit-assoc-hunters" multiple style="height:120px;"></select>
+        </div>
+        <div class="form-group">
+          <label>Users</label>
+          <select id="edit-assoc-users" multiple style="height:120px;"></select>
+        </div>
+      </div>
+      <div id="edit-assoc-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitEditAssoc()">Save</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-assoc-modal').classList.remove('open')">Cancel</button>
+      </div>
+    </div>
+  </div>
 </div><!-- /container -->
 
 <!-- ── SAVE VIEW MODAL ── -->
@@ -715,22 +773,38 @@ function showPage(name) {
       const h = hunters.find(x => x.id === currentUser.hunter_id);
       notice.style.display = 'block';
       notice.textContent = h
-        ? `Logging as: ${h.name}`
+        ? 'Logging as: ' + h.name
         : 'Your account is not linked to a hunter — contact an admin.';
     } else {
       notice.style.display = 'none';
+    }
+    // Show association context selector for admins (if associations exist)
+    const addAssocDiv = document.getElementById('add-assoc-notice');
+    if (currentUser.role === 'admin') {
+      const assocs = await api('/associations');
+      if (assocs.length > 0) {
+        const sel = document.getElementById('add-assoc-select');
+        sel.innerHTML = '<option value="">All / no filter</option>' +
+          assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+        addAssocDiv.style.display = 'block';
+      } else {
+        addAssocDiv.style.display = 'none';
+      }
+    } else {
+      addAssocDiv.style.display = 'none';
     }
   }
   if (name === 'hunters') loadHunters();
   if (name === 'views') loadViews();
   if (name === 'embeds') loadEmbedsPage();
   if (name === 'users') loadUsersPage();
+  if (name === 'associations') loadAssociationsPage();
 }
 
 // ─── INIT ────────────────────────────────────────────────
 async function init() {
   [hunters, speciesList, locationsList] = await Promise.all([
-    api('/hunters'), api('/stats/species'), api('/stats/locations')
+    api(apiWithAssoc('/hunters')), api(apiWithAssoc('/stats/species')), api(apiWithAssoc('/stats/locations'))
   ]);
   loadDashboard();
   populateFilterDropdowns();
@@ -766,7 +840,7 @@ function populateFilterDropdowns() {
 // ─── DASHBOARD ───────────────────────────────────────────
 async function loadDashboard() {
   const [lb, game, specData] = await Promise.all([
-    api('/stats/leaderboard'), api('/game'), api('/stats/leaderboard?group_by=species')
+    api(apiWithAssoc('/stats/leaderboard')), api(apiWithAssoc('/game')), api(apiWithAssoc('/stats/leaderboard?group_by=species'))
   ]);
 
   const total = game.reduce((s, g) => s + g.count, 0);
@@ -878,6 +952,7 @@ async function loadLeaderboard(filters={}) {
   if (filters.year_from) params.set('year_from', filters.year_from);
   if (filters.year_to) params.set('year_to', filters.year_to);
   if (filters.group_by) params.set('group_by', filters.group_by);
+  if (currentAssocId) params.set('association_id', currentAssocId);
   const chartType = filters.chart_type || currentChartType;
 
   const data = await api('/stats/leaderboard?' + params.toString());
@@ -1059,7 +1134,7 @@ function renderLeaderboardList(data) {
 
 // ─── LOG ─────────────────────────────────────────────────
 async function loadLog() {
-  allLogEntries = await api('/game');
+  allLogEntries = await api(apiWithAssoc('/game'));
   filterLog();
 }
 
@@ -1133,7 +1208,7 @@ async function submitEntry() {
     toast('Entry saved!');
     clearForm();
     // Refresh metadata
-    [speciesList, locationsList] = await Promise.all([api('/stats/species'), api('/stats/locations')]);
+    [speciesList, locationsList] = await Promise.all([api(apiWithAssoc('/stats/species')), api(apiWithAssoc('/stats/locations'))]);
     populateFilterDropdowns();
   } catch (e) { toast('Error saving entry', false); }
 }
@@ -1146,8 +1221,8 @@ function clearForm() {
 
 // ─── HUNTERS ─────────────────────────────────────────────
 async function loadHunters() {
-  hunters = await api('/hunters');
-  const stats = await api('/stats/leaderboard');
+  hunters = await api(apiWithAssoc('/hunters'));
+  const stats = await api(apiWithAssoc('/stats/leaderboard'));
   const totals = Object.fromEntries(stats.map(r => [r.hunter_id, r.total]));
 
   document.getElementById('hunters-table').innerHTML = renderHuntersTable(hunters, totals);
@@ -1381,7 +1456,7 @@ async function openEditView(id) {
 
   // Populate and pre-select multi-selects
   const [hunterOpts, speciesOpts, locationOpts] = await Promise.all([
-    api('/hunters'), api('/stats/species'), api('/stats/locations')
+    api(apiWithAssoc('/hunters')), api(apiWithAssoc('/stats/species')), api(apiWithAssoc('/stats/locations'))
   ]);
   const setMulti = (id, opts, selected) => {
     const el = document.getElementById(id);
@@ -1590,6 +1665,44 @@ async function loadEmbedsPage() {
 }
 
 
+// ─── ASSOCIATION STATE ───────────────────────────────
+let currentAssocId = null;  // null = all / site-wide filter
+
+function assocParam() {
+  // Returns query string fragment to append to API calls
+  const id = currentAssocId || currentUser?.site_assoc_id;
+  return id ? `association_id=${id}` : '';
+}
+
+function apiWithAssoc(path) {
+  // Appends association filter to a path
+  const p = assocParam();
+  return path + (p ? (path.includes('?') ? '&' : '?') + p : '');
+}
+
+async function setSiteAssociation(assocId) {
+  const id = assocId ? parseInt(assocId) : null;
+  await api('/session/association', { method: 'POST', body: JSON.stringify({ association_id: id }) });
+  currentAssocId = id;
+  currentUser.site_assoc_id = id;
+  // Reload all current data
+  await init();
+  const page = document.querySelector('.page.active')?.id?.replace('page-','');
+  if (page === 'leaderboard') loadLeaderboard(currentFilters);
+  if (page === 'log') loadLog();
+}
+
+async function loadAssocSelector() {
+  const assocs = await api('/associations');
+  const sel = document.getElementById('site-assoc-select');
+  sel.innerHTML = '<option value="">All associations</option>' +
+    assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+  // Show selector if user has >1 association or is admin with any associations
+  const show = currentUser.role === 'admin' ? assocs.length > 0 : assocs.length > 1;
+  document.getElementById('assoc-selector').style.display = show ? 'flex' : 'none';
+  currentAssocId = currentUser.site_assoc_id || null;
+}
+
 // ─── AUTH ──────────────────────────────────────────────
 let currentUser = null;
 
@@ -1631,7 +1744,9 @@ async function showApp() {
   // Show Users nav for admins
   if (currentUser.role === 'admin') {
     document.getElementById('nav-users').style.display = '';
+    document.getElementById('nav-assoc').style.display = '';
   }
+  loadAssocSelector();
   // Hide write-action nav items for viewers
   applyRoleRestrictions();
   await init();
@@ -1830,6 +1945,112 @@ function escHtml(s) {
 
 // Unregister datalabels globally — registered per-chart only
 Chart.unregister(ChartDataLabels);
+
+
+// ─── ASSOCIATIONS ─────────────────────────────────────
+async function loadAssociationsPage() {
+  const [assocs, allHunters, allUsers] = await Promise.all([
+    api('/associations'), api('/hunters'), api('/users')
+  ]);
+  const el = document.getElementById('assoc-list');
+  if (!assocs.length) {
+    el.innerHTML = '<p style="color:var(--fog);font-size:0.85rem;">No associations yet.</p>';
+    return;
+  }
+  el.innerHTML = assocs.map(a => `
+    <div class="card" style="margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:150px;">
+          <div style="font-family:'Playfair Display',serif;font-size:1rem;color:var(--gold);">${escHtml(a.name)}</div>
+          <div style="font-size:0.75rem;color:var(--fog);margin-top:0.2rem;">
+            ${a.hunter_count} hunter${a.hunter_count !== 1 ? 's' : ''} · ${a.user_count} user${a.user_count !== 1 ? 's' : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-ghost" style="font-size:0.78rem;padding:0.3rem 0.75rem;" onclick="openEditAssoc(${a.id})">✎ Edit</button>
+          <button class="btn btn-danger" style="font-size:0.78rem;padding:0.3rem 0.75rem;" onclick="deleteAssoc(${a.id},'${escHtml(a.name)}')">✕</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function createAssociation() {
+  const name = document.getElementById('new-assoc-name').value.trim();
+  if (!name) return;
+  try {
+    await api('/associations', { method: 'POST', body: JSON.stringify({ name }) });
+    document.getElementById('new-assoc-name').value = '';
+    toast('Association created!');
+    await loadAssociationsPage();
+    await loadAssocSelector();
+  } catch(e) {
+    toast('Error: ' + (e.message || 'unknown'), false);
+  }
+}
+
+async function openEditAssoc(id) {
+  const [assocs, allHunters, allUsers] = await Promise.all([
+    api('/associations'), api('/hunters'), api('/users')
+  ]);
+  const a = assocs.find(x => x.id === id);
+  if (!a) return;
+
+  // Fetch current members
+  const [hRows, uRows] = await Promise.all([
+    api(`/associations/${id}/hunters`),
+    api(`/associations/${id}/users`)
+  ]);
+  const memberHunterIds = new Set(hRows.map(r => r.hunter_id));
+  const memberUserIds   = new Set(uRows.map(r => r.user_id));
+
+  document.getElementById('edit-assoc-id').value   = id;
+  document.getElementById('edit-assoc-name').value  = a.name;
+  document.getElementById('edit-assoc-error').textContent = '';
+
+  const hSel = document.getElementById('edit-assoc-hunters');
+  hSel.innerHTML = allHunters.map(h =>
+    `<option value="${h.id}" ${memberHunterIds.has(h.id) ? 'selected' : ''}>${escHtml(h.name)}</option>`
+  ).join('');
+
+  const uSel = document.getElementById('edit-assoc-users');
+  uSel.innerHTML = allUsers.map(u =>
+    `<option value="${u.id}" ${memberUserIds.has(u.id) ? 'selected' : ''}>${escHtml(u.username)} (${u.role})</option>`
+  ).join('');
+
+  document.getElementById('edit-assoc-modal').classList.add('open');
+}
+
+async function submitEditAssoc() {
+  const id   = document.getElementById('edit-assoc-id').value;
+  const name = document.getElementById('edit-assoc-name').value.trim();
+  const err  = document.getElementById('edit-assoc-error');
+  err.textContent = '';
+  if (!name) { err.textContent = 'Name is required.'; return; }
+
+  const getMulti = elId => Array.from(document.getElementById(elId).selectedOptions).map(o => parseInt(o.value));
+
+  try {
+    await api('/associations/' + id, { method: 'PUT', body: JSON.stringify({ name }) });
+    await api('/associations/' + id + '/members', {
+      method: 'POST',
+      body: JSON.stringify({ hunter_ids: getMulti('edit-assoc-hunters'), user_ids: getMulti('edit-assoc-users') })
+    });
+    document.getElementById('edit-assoc-modal').classList.remove('open');
+    toast('Association updated!');
+    await loadAssociationsPage();
+    await loadAssocSelector();
+  } catch(e) { err.textContent = 'Error: ' + (e.message || 'unknown'); }
+}
+
+async function deleteAssoc(id, name) {
+  if (!confirm(`Delete association "${name}"? Hunters and users will be unlinked but not deleted.`)) return;
+  try {
+    await api('/associations/' + id, { method: 'DELETE' });
+    toast('Association deleted');
+    await loadAssociationsPage();
+    await loadAssocSelector();
+  } catch(e) { toast('Error deleting association', false); }
+}
 
 // ─── START ───────────────────────────────────────────────
 checkAuth();

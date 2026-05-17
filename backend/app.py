@@ -42,6 +42,21 @@ def init_db():
             disabled INTEGER NOT NULL DEFAULT 0,
             hunter_id INTEGER
         );
+        CREATE TABLE IF NOT EXISTS associations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS hunter_associations (
+            hunter_id INTEGER NOT NULL,
+            association_id INTEGER NOT NULL,
+            PRIMARY KEY (hunter_id, association_id)
+        );
+        CREATE TABLE IF NOT EXISTS user_associations (
+            user_id INTEGER NOT NULL,
+            association_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, association_id)
+        );
         CREATE TABLE IF NOT EXISTS hunters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
@@ -207,7 +222,7 @@ def me():
     user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
     conn.close()
     hunter_id = user['hunter_id'] if user else None
-    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role'], 'hunter_id': hunter_id})
+    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role'], 'hunter_id': hunter_id, 'site_assoc_id': session.get('site_assoc_id')})
 
 
 # ── Users ────────────────────────────────────────────────
@@ -319,6 +334,179 @@ def set_disabled(user_id):
     return jsonify({'success': True})
 
 
+
+def get_assoc_filter(conn, association_id=None):
+    role = session.get('role')
+    uid  = session.get('user_id')
+    if association_id is None:
+        association_id = session.get('site_assoc_id')
+
+    if role == 'admin' and not association_id:
+        return '', [], []
+
+    if role == 'admin' and association_id:
+        return (
+            "JOIN hunter_associations ha_f ON ha_f.hunter_id = h.id",
+            ["ha_f.association_id = ?"],
+            [association_id]
+        )
+
+    # non-admin: verify membership if specific assoc requested
+    if association_id:
+        ok = conn.execute(
+            "SELECT 1 FROM user_associations WHERE user_id=? AND association_id=?",
+            (uid, association_id)
+        ).fetchone()
+        if not ok:
+            association_id = None
+
+    if association_id:
+        return (
+            "JOIN hunter_associations ha_f ON ha_f.hunter_id = h.id",
+            ["ha_f.association_id = ?"],
+            [association_id]
+        )
+    else:
+        return (
+            "JOIN hunter_associations ha_f ON ha_f.hunter_id = h.id "
+            "JOIN user_associations ua_f ON ua_f.association_id = ha_f.association_id AND ua_f.user_id = ?",
+            [],
+            [uid]
+        )
+
+
+@app.route('/api/associations', methods=['GET'])
+@login_required
+def get_associations():
+    conn = get_db()
+    role = session.get('role')
+    uid  = session.get('user_id')
+    if role == 'admin':
+        rows = conn.execute(
+            "SELECT a.*, COUNT(DISTINCT ha.hunter_id) as hunter_count, COUNT(DISTINCT ua.user_id) as user_count "
+            "FROM associations a "
+            "LEFT JOIN hunter_associations ha ON ha.association_id=a.id "
+            "LEFT JOIN user_associations ua ON ua.association_id=a.id "
+            "GROUP BY a.id ORDER BY a.name"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT a.*, COUNT(DISTINCT ha.hunter_id) as hunter_count, COUNT(DISTINCT ua.user_id) as user_count "
+            "FROM associations a "
+            "JOIN user_associations ua2 ON ua2.association_id=a.id AND ua2.user_id=? "
+            "LEFT JOIN hunter_associations ha ON ha.association_id=a.id "
+            "LEFT JOIN user_associations ua ON ua.association_id=a.id "
+            "GROUP BY a.id ORDER BY a.name",
+            (uid,)
+        ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/associations', methods=['POST'])
+@admin_required
+def create_association():
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    conn = get_db()
+    try:
+        conn.execute("INSERT INTO associations (name) VALUES (?)", (name,))
+        conn.commit()
+        row = conn.execute("SELECT * FROM associations WHERE name=?", (name,)).fetchone()
+        conn.close()
+        return jsonify(dict(row)), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Association already exists'}), 409
+
+
+@app.route('/api/associations/<int:assoc_id>', methods=['PUT'])
+@admin_required
+def update_association(assoc_id):
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    conn = get_db()
+    try:
+        conn.execute("UPDATE associations SET name=? WHERE id=?", (name, assoc_id))
+        conn.commit()
+        row = conn.execute("SELECT * FROM associations WHERE id=?", (assoc_id,)).fetchone()
+        conn.close()
+        return jsonify(dict(row))
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Name already exists'}), 409
+
+
+@app.route('/api/associations/<int:assoc_id>', methods=['DELETE'])
+@admin_required
+def delete_association(assoc_id):
+    conn = get_db()
+    conn.execute("DELETE FROM hunter_associations WHERE association_id=?", (assoc_id,))
+    conn.execute("DELETE FROM user_associations WHERE association_id=?", (assoc_id,))
+    conn.execute("DELETE FROM associations WHERE id=?", (assoc_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/associations/<int:assoc_id>/hunters', methods=['GET'])
+@login_required
+def get_assoc_hunters(assoc_id):
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM hunter_associations WHERE association_id=?", (assoc_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/associations/<int:assoc_id>/users', methods=['GET'])
+@login_required
+def get_assoc_users(assoc_id):
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM user_associations WHERE association_id=?", (assoc_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route('/api/associations/<int:assoc_id>/members', methods=['POST'])
+@admin_required
+def set_assoc_members(assoc_id):
+    data = request.json or {}
+    hunter_ids = data.get('hunter_ids', [])
+    user_ids   = data.get('user_ids', [])
+    conn = get_db()
+    conn.execute("DELETE FROM hunter_associations WHERE association_id=?", (assoc_id,))
+    conn.execute("DELETE FROM user_associations WHERE association_id=?", (assoc_id,))
+    for hid in hunter_ids:
+        conn.execute("INSERT OR IGNORE INTO hunter_associations (hunter_id,association_id) VALUES (?,?)", (hid, assoc_id))
+    for uid in user_ids:
+        conn.execute("INSERT OR IGNORE INTO user_associations (user_id,association_id) VALUES (?,?)", (uid, assoc_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/session/association', methods=['POST'])
+@login_required
+def set_session_association():
+    data = request.json or {}
+    assoc_id = data.get('association_id')
+    if assoc_id:
+        if session.get('role') != 'admin':
+            conn = get_db()
+            ok = conn.execute(
+                "SELECT 1 FROM user_associations WHERE user_id=? AND association_id=?",
+                (session['user_id'], assoc_id)
+            ).fetchone()
+            conn.close()
+            if not ok:
+                return jsonify({'error': 'Not a member of that association'}), 403
+    session['site_assoc_id'] = assoc_id
+    return jsonify({'success': True, 'association_id': assoc_id})
+
 # ── Health ────────────────────────────────────────────────
 
 @app.route('/api/health')
@@ -332,7 +520,27 @@ def health():
 @login_required
 def get_hunters():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM hunters ORDER BY name").fetchall()
+    assoc_id = request.args.get('association_id', type=int)
+    aj, ac, ap = get_assoc_filter(conn, assoc_id)
+    if aj:
+        where = ("WHERE " + " AND ".join(ac)) if ac else ""
+        q = (
+            "SELECT DISTINCT h.*, "
+            "GROUP_CONCAT(DISTINCT a2.name) as associations "
+            "FROM hunters h " + aj + " "
+            "LEFT JOIN hunter_associations ha2 ON ha2.hunter_id=h.id "
+            "LEFT JOIN associations a2 ON a2.id=ha2.association_id "
+            + where + " GROUP BY h.id ORDER BY h.name"
+        )
+        rows = conn.execute(q, ap).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT h.*, GROUP_CONCAT(DISTINCT a.name) as associations "
+            "FROM hunters h "
+            "LEFT JOIN hunter_associations ha ON ha.hunter_id=h.id "
+            "LEFT JOIN associations a ON a.id=ha.association_id "
+            "GROUP BY h.id ORDER BY h.name"
+        ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -389,10 +597,11 @@ def delete_hunter(hunter_id):
 @login_required
 def get_game():
     conn = get_db()
-    rows = conn.execute('''
-        SELECT g.*, h.name as hunter_name FROM game_log g
-        JOIN hunters h ON g.hunter_id=h.id ORDER BY g.hunt_date DESC
-    ''').fetchall()
+    assoc_id = request.args.get('association_id', type=int)
+    aj, ac, ap = get_assoc_filter(conn, assoc_id)
+    where = ("WHERE " + " AND ".join(ac)) if ac else ""
+    q = f"SELECT DISTINCT g.*, h.name as hunter_name FROM game_log g JOIN hunters h ON g.hunter_id=h.id {aj} {where} ORDER BY g.hunt_date DESC"
+    rows = conn.execute(q, ap).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -466,12 +675,16 @@ def leaderboard():
         conditions.append("strftime('%Y',g.hunt_date)>=?"); params.append(year_from)
     if year_to:
         conditions.append("strftime('%Y',g.hunt_date)<=?"); params.append(year_to)
-    where = ("WHERE "+" AND ".join(conditions)) if conditions else ""
-    if group_by == 'species':
-        q = f"SELECT g.species as label,SUM(g.count) as total FROM game_log g JOIN hunters h ON g.hunter_id=h.id {where} GROUP BY g.species ORDER BY total DESC"
-    else:
-        q = f"SELECT h.name as label,SUM(g.count) as total,h.id as hunter_id FROM game_log g JOIN hunters h ON g.hunter_id=h.id {where} GROUP BY g.hunter_id ORDER BY total DESC"
     conn = get_db()
+    assoc_id = request.args.get('association_id', type=int)
+    aj, ac, ap = get_assoc_filter(conn, assoc_id)
+    conditions = ac + conditions
+    params     = ap + params
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    if group_by == 'species':
+        q = f"SELECT g.species as label,SUM(g.count) as total FROM game_log g JOIN hunters h ON g.hunter_id=h.id {aj} {where} GROUP BY g.species ORDER BY total DESC"
+    else:
+        q = f"SELECT h.name as label,SUM(g.count) as total,h.id as hunter_id FROM game_log g JOIN hunters h ON g.hunter_id=h.id {aj} {where} GROUP BY g.hunter_id ORDER BY total DESC"
     rows = conn.execute(q, params).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -480,7 +693,11 @@ def leaderboard():
 @login_required
 def species_list():
     conn = get_db()
-    rows = conn.execute("SELECT DISTINCT species FROM game_log ORDER BY species").fetchall()
+    assoc_id = request.args.get('association_id', type=int)
+    aj, ac, ap = get_assoc_filter(conn, assoc_id)
+    where = ("WHERE " + " AND ".join(ac)) if ac else ""
+    q = f"SELECT DISTINCT g.species FROM game_log g JOIN hunters h ON g.hunter_id=h.id {aj} {where} ORDER BY g.species"
+    rows = conn.execute(q, ap).fetchall()
     conn.close()
     return jsonify([r['species'] for r in rows])
 
@@ -488,7 +705,12 @@ def species_list():
 @login_required
 def locations_list():
     conn = get_db()
-    rows = conn.execute("SELECT DISTINCT location FROM game_log WHERE location!='' ORDER BY location").fetchall()
+    assoc_id = request.args.get('association_id', type=int)
+    aj, ac, ap = get_assoc_filter(conn, assoc_id)
+    conds = ["g.location != ''"] + ac
+    where = "WHERE " + " AND ".join(conds)
+    q = f"SELECT DISTINCT g.location FROM game_log g JOIN hunters h ON g.hunter_id=h.id {aj} {where} ORDER BY g.location"
+    rows = conn.execute(q, ap).fetchall()
     conn.close()
     return jsonify([r['location'] for r in rows])
 
