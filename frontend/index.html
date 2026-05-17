@@ -1877,42 +1877,29 @@ async function loadAssocSelector() {
   const sel = document.getElementById('site-assoc-select');
   const isAdmin = currentUser.role === 'admin';
 
-  if (isAdmin) {
-    // Admin: "All associations" + every association
-    sel.innerHTML = '<option value="">All associations</option>' +
-      assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
-  } else {
-    // Non-admin: no "All" option, just their associations
-    // Auto-select their only one if they have exactly 1, or restore session selection
-    const activeId = currentUser.site_assoc_id || (assocs.length === 1 ? assocs[0].id : null);
-    sel.innerHTML = assocs.map(a =>
-      `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`
-    ).join('');
-    // Auto-set session to their only association if not already set
-    if (assocs.length === 1 && !currentUser.site_assoc_id) {
-      await api('/session/association', { method: 'POST', body: JSON.stringify({ association_id: assocs[0].id }) });
-      currentUser.site_assoc_id = assocs[0].id;
-    }
+  // "All associations" option: always for admin; for others only when they have ≥2
+  const showAll = isAdmin || assocs.length >= 2;
+  sel.innerHTML = (showAll ? '<option value="">All associations</option>' : '') +
+    assocs.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join('');
+
+  // Auto-assign session to their single association (non-admin, 1 assoc only)
+  if (!isAdmin && assocs.length === 1 && !currentUser.site_assoc_id) {
+    await api('/session/association', { method: 'POST', body: JSON.stringify({ association_id: assocs[0].id }) });
+    currentUser.site_assoc_id = assocs[0].id;
   }
 
-  // Show for admins with ≥1 assoc, and for non-admins with ≥1 assoc
+  // Show selector whenever they have ≥1 association
   const show = assocs.length > 0;
   document.getElementById('assoc-selector').style.display = show ? 'flex' : 'none';
 
-  // Initialise currentAssocId only on first load (undefined); after that it owns itself
+  // Initialise currentAssocId only on first load (undefined)
   if (currentAssocId === undefined) {
-    if (isAdmin) {
-      currentAssocId = currentUser.site_assoc_id || null;
-    } else {
-      // Non-admin: use session value, or auto-pick their only association
-      currentAssocId = currentUser.site_assoc_id ||
-        (assocs.length === 1 ? assocs[0].id : null);
-    }
+    currentAssocId = currentUser.site_assoc_id ||
+      (!isAdmin && assocs.length === 1 ? assocs[0].id : null);
   }
 
-  // Sync the dropdown to currentAssocId
-  const sel2 = document.getElementById('site-assoc-select');
-  sel2.value = currentAssocId || '';
+  // Sync dropdown to current state
+  sel.value = currentAssocId || '';
 }
 
 // ─── AUTH ──────────────────────────────────────────────
@@ -2340,6 +2327,8 @@ async function setupAddEntryAssocSelector() {
     return;
   }
 
+  // Always fetch all associations (not filtered by global) so assoc_admin
+  // can pick any of their associations independently of the global view filter
   const assocs = await api('/associations');
 
   if (assocs.length === 0) {
@@ -2349,13 +2338,29 @@ async function setupAddEntryAssocSelector() {
   }
 
   const sel = document.getElementById('add-assoc-select');
-  const activeId = currentAssocId || null;
   sel.disabled = false;
-  sel.innerHTML = '<option value="">All associations</option>' +
-    assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+
+  if (isAdmin) {
+    // Admin: "All" + every association
+    sel.innerHTML = '<option value="">All associations</option>' +
+      assocs.map(a => `<option value="${a.id}" ${currentAssocId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+  } else {
+    // assoc_admin: their associations only, no "All" (they must pick one to add entries)
+    // Pre-select currentAssocId if it's in their list, else first association
+    const validId = assocs.find(a => a.id === currentAssocId) ? currentAssocId : assocs[0].id;
+    sel.innerHTML = assocs.map(a =>
+      `<option value="${a.id}" ${a.id === validId ? 'selected' : ''}>${escHtml(a.name)}</option>`
+    ).join('');
+    // Ensure hunter dropdown reflects the resolved selection
+    await populateAddForm(validId);
+    addAssocDiv.style.display = 'block';
+    const hint = addAssocDiv.querySelector('div:last-child');
+    if (hint) hint.textContent = 'Select the association to add entries for.';
+    return; // already populated above
+  }
 
   const hint = addAssocDiv.querySelector('div:last-child');
-  if (hint) hint.textContent = 'Filter the hunter dropdown by association. Entry attributed to the hunter associations.';
+  if (hint) hint.textContent = 'Filter the hunter dropdown by association.';
 
   addAssocDiv.style.display = 'block';
   await populateAddForm(sel.disabled ? null : (sel.value ? parseInt(sel.value) : null));
