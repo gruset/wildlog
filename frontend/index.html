@@ -2288,17 +2288,14 @@ async function setupAddEntryAssocSelector() {
   const addAssocDiv = document.getElementById('add-assoc-notice');
   const isAdmin = currentUser.role === 'admin';
 
-  // Show for admins always (if assocs exist); show for users with ≥2 assocs (view-only)
-  const assocs = await api('/associations');
-
-  // For user role — check how many they belong to (assocs already filtered to theirs)
-  const showForUser = currentUser.role === 'user' && assocs.length >= 2;
-
-  if (!isAdmin && !showForUser) {
+  // Association context panel is admin-only on Add Entry
+  if (!isAdmin) {
     addAssocDiv.style.display = 'none';
-    await populateAddForm(currentAssocId);
+    await populateAddForm(null);
     return;
   }
+
+  const assocs = await api('/associations');
 
   if (assocs.length === 0) {
     addAssocDiv.style.display = 'none';
@@ -2307,25 +2304,13 @@ async function setupAddEntryAssocSelector() {
   }
 
   const sel = document.getElementById('add-assoc-select');
-  // Resolve which assoc is active: site-wide filter, or first assoc for users
-  const activeId = currentAssocId ||
-    (currentUser.role === 'user' && assocs.length ? assocs[0].id : null);
+  const activeId = currentAssocId || null;
+  sel.disabled = false;
+  sel.innerHTML = '<option value="">All associations</option>' +
+    assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
 
-  if (isAdmin) {
-    sel.disabled = false;
-    sel.innerHTML = '<option value="">All associations</option>' +
-      assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
-  } else {
-    // User role: show read-only (disabled select showing active assoc or all)
-    sel.disabled = true;
-    sel.innerHTML = assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
-  }
-
-  // Update hint text
   const hint = addAssocDiv.querySelector('div:last-child');
-  if (hint) hint.textContent = isAdmin
-    ? 'Filter the hunter dropdown by association. Entry attributed to hunter associations.'
-    : 'You are viewing this association. Use the global filter to switch.';
+  if (hint) hint.textContent = 'Filter the hunter dropdown by association. Entry attributed to the hunter associations.';
 
   addAssocDiv.style.display = 'block';
   await populateAddForm(sel.disabled ? null : (sel.value ? parseInt(sel.value) : null));
