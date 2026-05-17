@@ -454,22 +454,22 @@
   <!-- ── DASHBOARD ── -->
   <div id="page-dashboard" class="page active">
     <div class="stats-row" id="stat-cards">
-      <div class="stat-card"><div class="val" id="stat-total">—</div><div class="lbl">Total Game</div></div>
-      <div class="stat-card"><div class="val" id="stat-hunters">—</div><div class="lbl">Hunters</div></div>
-      <div class="stat-card"><div class="val" id="stat-species">—</div><div class="lbl">Species</div></div>
-      <div class="stat-card"><div class="val" id="stat-best">—</div><div class="lbl">Best Hunter</div></div>
+      <div class="stat-card"><div class="val" id="stat-total">—</div><div class="lbl" data-i18n="stat_total">Total Game</div></div>
+      <div class="stat-card"><div class="val" id="stat-hunters">—</div><div class="lbl" data-i18n="stat_hunters">Hunters</div></div>
+      <div class="stat-card"><div class="val" id="stat-species">—</div><div class="lbl" data-i18n="stat_species">Species</div></div>
+      <div class="stat-card"><div class="val" id="stat-best">—</div><div class="lbl" data-i18n="stat_best">Best Hunter</div></div>
     </div>
     <div class="dashboard-grid">
       <div class="card chart-full">
-        <div class="card-title" data-i18n="chart_per_hunter">Game per Hunter — Overview</div>
+        <div class="card-title" data-i18n="chart_per_hunter" data-i18n="chart_per_hunter">Game per Hunter — Overview</div>
         <div class="chart-wrap"><canvas id="dash-chart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title" data-i18n="chart_by_species">By Species</div>
+        <div class="card-title" data-i18n="chart_by_species" data-i18n="chart_by_species">By Species</div>
         <div class="chart-wrap"><canvas id="species-chart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title" data-i18n="recent_entries">Recent Entries</div>
+        <div class="card-title" data-i18n="recent_entries" data-i18n="recent_entries">Recent Entries</div>
         <div class="table-wrap" id="recent-table"></div>
       </div>
     </div>
@@ -481,27 +481,27 @@
       <h3 data-i18n="filter_leaderboard">⚙ Filter Leaderboard</h3>
       <div class="filter-grid">
         <div class="filter-group">
-          <label>Hunters</label>
+          <label data-i18n="lbl_hunters">Hunters</label>
           <select id="lb-hunters" multiple></select>
         </div>
         <div class="filter-group">
-          <label>Species</label>
+          <label data-i18n="lbl_species">Species</label>
           <select id="lb-species" multiple></select>
         </div>
         <div class="filter-group">
-          <label>Location</label>
+          <label data-i18n="lbl_location">Location</label>
           <select id="lb-location" multiple></select>
         </div>
         <div class="filter-group">
-          <label>Year From</label>
+          <label data-i18n="lbl_year_from">Year From</label>
           <input id="lb-year-from" type="number" placeholder="2020" min="2000" max="2099">
         </div>
         <div class="filter-group">
-          <label>Year To</label>
+          <label data-i18n="lbl_year_to">Year To</label>
           <input id="lb-year-to" type="number" placeholder="2025" min="2000" max="2099">
         </div>
         <div class="filter-group">
-          <label>Group By</label>
+          <label data-i18n="lbl_group_by">Group By</label>
           <select id="lb-groupby">
             <option value="hunter">Hunter</option>
             <option value="species">Species</option>
@@ -509,9 +509,9 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="applyLeaderboard()">Apply Filters</button>
-        <button class="btn btn-ghost" onclick="resetLeaderboard()">Reset</button>
-        <button class="btn btn-ghost" onclick="openSaveViewModal()">🔖 Save This View</button>
+        <button class="btn btn-primary" onclick="applyLeaderboard()" data-i18n="btn_apply">Apply Filters</button>
+        <button class="btn btn-ghost" onclick="resetLeaderboard()" data-i18n="btn_reset">Reset</button>
+        <button class="btn btn-ghost" onclick="openSaveViewModal()" data-i18n="btn_save_view">🔖 Save This View</button>
       </div>
       <div class="chart-type-row" style="margin-top:1rem;">
         <button class="active" onclick="setChartType('bar',this)">Bar</button>
@@ -524,7 +524,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title" data-i18n="leaderboard_chart">Leaderboard Chart</div>
+      <div class="card-title" data-i18n="leaderboard_chart" data-i18n="leaderboard_chart">Leaderboard Chart</div>
       <div class="chart-wrap"><canvas id="lb-chart"></canvas></div>
     </div>
     <div class="leaderboard" id="lb-list"></div>
@@ -536,7 +536,7 @@
       <h3 data-i18n="filter_log">⚙ Filter Log</h3>
       <div class="filter-grid">
         <div class="filter-group">
-          <label>Hunter</label>
+          <label data-i18n="lbl_hunter">Hunter</label>
           <select id="log-hunter-filter">
             <option value="">All</option>
           </select>
@@ -548,13 +548,13 @@
           </select>
         </div>
         <div class="filter-group">
-          <label>Search</label>
+          <label data-i18n="lbl_search">Search</label>
           <input id="log-search" type="text" placeholder="Location, notes…">
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="filterLog()">Filter</button>
-        <button class="btn btn-ghost" onclick="clearLogFilter()">Clear</button>
+        <button class="btn btn-primary" onclick="filterLog()" data-i18n="btn_filter">Filter</button>
+        <button class="btn btn-ghost" onclick="clearLogFilter()" data-i18n="btn_clear">Clear</button>
       </div>
     </div>
     <div class="card">
@@ -566,7 +566,7 @@
   <!-- ── ADD ENTRY ── -->
   <div id="page-add" class="page">
     <div id="add-assoc-notice" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(45,30,15,0.4);border:1px solid rgba(200,134,10,0.2);border-radius:6px;">
-      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);margin-bottom:0.4rem;">Association context</div>
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);margin-bottom:0.4rem;" data-i18n="assoc_context">Association context</div>
       <select id="add-assoc-select" onchange="onAddAssocChange()" style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.4rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
         <option value="">All / no filter</option>
       </select>
@@ -577,35 +577,35 @@
       <div class="card-title" data-i18n="add_entry_title">Add Game Entry</div>
       <div class="form-grid" id="entry-form">
         <div class="form-group">
-          <label>Hunter *</label>
+          <label data-i18n="lbl_hunter_req">Hunter *</label>
           <select id="add-hunter"></select>
         </div>
         <div class="form-group">
-          <label>Species *</label>
+          <label data-i18n="lbl_species_req">Species *</label>
           <input id="add-species" list="species-list" placeholder="Moose, Deer…">
           <datalist id="species-list"></datalist>
         </div>
         <div class="form-group">
-          <label>Count *</label>
+          <label data-i18n="lbl_count_req">Count *</label>
           <input id="add-count" type="number" value="1" min="1">
         </div>
         <div class="form-group">
-          <label>Hunt Date *</label>
+          <label data-i18n="lbl_date_req">Hunt Date *</label>
           <input id="add-date" type="date">
         </div>
         <div class="form-group">
-          <label>Location</label>
+          <label data-i18n="lbl_location">Location</label>
           <input id="add-location" list="location-list" placeholder="Forest, Lake…">
           <datalist id="location-list"></datalist>
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label>Notes</label>
+          <label data-i18n="lbl_notes">Notes</label>
           <textarea id="add-notes" placeholder="Optional notes…"></textarea>
         </div>
       </div>
       <div class="btn-row" style="margin-top:1.25rem;">
-        <button class="btn btn-primary" onclick="submitEntry()">Save Entry</button>
-        <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+        <button class="btn btn-primary" onclick="submitEntry()" data-i18n="btn_save_entry">Save Entry</button>
+        <button class="btn btn-ghost" onclick="clearForm()" data-i18n="btn_clear_form">Clear</button>
       </div>
     </div>
   </div>
@@ -616,17 +616,17 @@
       <div class="card-title">Add Hunter</div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Name *</label>
+          <label data-i18n="lbl_name_req">Name *</label>
           <input id="new-hunter-name" type="text" placeholder="Hunter name…"
             onkeydown="if(event.key==='Enter')addHunter()">
         </div>
         <div class="form-group" id="new-hunter-assoc-group" style="display:none;">
-          <label>Associations</label>
+          <label data-i18n="lbl_associations">Associations</label>
           <select id="new-hunter-assocs" multiple style="height:80px;"></select>
         </div>
       </div>
       <div class="btn-row" style="margin-top:1rem;">
-        <button class="btn btn-primary" onclick="addHunter()">Add Hunter</button>
+        <button class="btn btn-primary" onclick="addHunter()" data-i18n="btn_add_hunter">Add Hunter</button>
       </div>
     </div>
     <div class="card">
@@ -640,7 +640,7 @@
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-title">Saved Views</div>
       <p style="font-size:0.85rem;color:var(--fog);">
-        Create a view on the Leaderboard page by setting filters and clicking "Save This View".
+        <span data-i18n="saved_views_hint">Create a view on the Leaderboard page by setting filters and clicking "Save This View".</span>
         Click a saved view to load it directly.
       </p>
     </div>
@@ -653,27 +653,27 @@
     <div class="card" style="margin-bottom:1.5rem;">
       <div class="card-title" data-i18n="create_embed_title">Create Embed</div>
       <p style="font-size:0.85rem;color:var(--fog);margin-bottom:1.25rem;">
-        Each embed is a read-only iframe of a saved view. Create your views on the
+        <span data-i18n="create_embed_hint">Each embed is a read-only iframe of a saved view.</span> Create your views on the
         <a href="#" onclick="showPage('leaderboard');return false;" style="color:var(--gold);">Leaderboard</a> page first.
       </p>
       <div id="no-views-msg" style="display:none;color:var(--fog);font-size:0.85rem;padding:0.5rem 0;">
-        No saved views yet — go to the Leaderboard page and save a view before creating an embed.
+        <span data-i18n="no_views_embed">No saved views yet — go to the Leaderboard page and save a view before creating an embed.</span>
       </div>
       <div id="embed-create-form">
         <div class="form-grid">
           <div class="form-group">
-            <label>Embed Name *</label>
+            <label data-i18n="lbl_embed_name">Embed Name *</label>
             <input id="emb-name" type="text" placeholder="e.g. Club Website — Top Hunters">
           </div>
           <div class="form-group">
-            <label>Saved View *</label>
+            <label data-i18n="lbl_saved_view">Saved View *</label>
             <select id="emb-view">
               <option value="">— select a view —</option>
             </select>
           </div>
         </div>
         <div class="btn-row" style="margin-top:1.25rem;">
-          <button class="btn btn-primary" onclick="createToken()">Generate Embed</button>
+          <button class="btn btn-primary" onclick="createToken()" data-i18n="btn_gen_embed">Generate Embed</button>
         </div>
       </div>
     </div>
@@ -687,19 +687,19 @@
   <!-- Embed code modal -->
   <div class="modal-overlay" id="embed-modal">
     <div class="modal" style="max-width:620px;">
-      <h3>data-i18n="embed_code_title">📡 Embed Code</h3>
+      <h3 data-i18n="embed_code_title">📡 Embed Code</h3>
       <p style="font-size:0.82rem;color:var(--fog);margin-bottom:1rem;">
         Copy this snippet into any website. The token grants read-only access — rotate or delete it here if needed.
       </p>
       <div style="margin-bottom:1rem;">
-        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">Preview URL</label>
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;" data-i18n="lbl_preview_url">Preview URL</label>
         <div style="display:flex;gap:0.5rem;">
           <input id="embed-preview-url" readonly style="flex:1;background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--fog);padding:0.5rem 0.75rem;font-size:0.78rem;font-family:monospace;">
-          <button class="btn btn-ghost" onclick="openPreview()">Open ↗</button>
+          <button class="btn btn-ghost" onclick="openPreview()" data-i18n="btn_open">Open ↗</button>
         </div>
       </div>
       <div style="margin-bottom:1rem;">
-        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">iframe Code</label>
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;" data-i18n="lbl_iframe_code">iframe Code</label>
         <textarea id="embed-code" readonly rows="4"
           style="width:100%;background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.6rem 0.8rem;font-size:0.78rem;font-family:monospace;resize:vertical;"></textarea>
       </div>
@@ -707,13 +707,13 @@
         <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.4rem;">Theme</label>
         <select id="embed-theme-select" onchange="refreshEmbedModal()"
           style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.5rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="transparent">Transparent</option>
+          <option value="dark" data-i18n="theme_dark">Dark</option>
+          <option value="light" data-i18n="theme_light">Light</option>
+          <option value="transparent" data-i18n="theme_transparent">Transparent</option>
         </select>
       </div>
       <div style="margin-bottom:1rem;">
-        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.5rem;">Iframe Size</label>
+        <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);display:block;margin-bottom:0.5rem;" data-i18n="lbl_iframe_size">Iframe Size</label>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
           <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(480,320)">480×320</button>
           <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="setEmbedSize(600,400)">600×400</button>
@@ -722,7 +722,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="copyEmbedCode()">Copy Code</button>
+        <button class="btn btn-primary" onclick="copyEmbedCode()" data-i18n="btn_copy_code">Copy Code</button>
         <button class="btn btn-ghost" onclick="closeEmbedModal()">Close</button>
       </div>
     </div>
@@ -735,20 +735,20 @@
       <div class="card-title">Add User</div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Username *</label>
+          <label data-i18n="lbl_username">Username *</label>
           <input id="new-user-username" type="text" placeholder="username">
         </div>
         <div class="form-group">
-          <label>Password * (min 8 chars)</label>
+          <label data-i18n="lbl_password">Password * (min 8 chars)</label>
           <input id="new-user-password" type="password" placeholder="Password">
         </div>
         <div class="form-group">
-          <label>Role</label>
+          <label data-i18n="lbl_role">Role</label>
           <select id="new-user-role">
-            <option value="viewer">Viewer — read only</option>
-            <option value="user">User — can log own game</option>
-            <option value="assoc_admin">Assoc. Admin — manage association</option>
-            <option value="admin">Admin — full access</option>
+            <option value="viewer" data-i18n="role_viewer">Viewer — read only</option>
+            <option value="user" data-i18n="role_user">User — can log own game</option>
+            <option value="assoc_admin" data-i18n="role_assoc_admin">Assoc. Admin — manage association</option>
+            <option value="admin" data-i18n="role_admin">Admin — full access</option>
           </select>
         </div>
         <div class="form-group">
@@ -764,7 +764,7 @@
         </div>
       </div>
       <div class="btn-row" style="margin-top:1.25rem;">
-        <button class="btn btn-primary" onclick="createUser()">Add User</button>
+        <button class="btn btn-primary" onclick="createUser()" data-i18n="btn_add_user">Add User</button>
       </div>
     </div>
     <div class="card">
@@ -779,10 +779,10 @@
       <div class="card-title" data-i18n="create_assoc_title">Create Association</div>
       <div style="display:flex;gap:0.75rem;">
         <div class="form-group" style="flex:1">
-          <input id="new-assoc-name" type="text" placeholder="e.g. North Ridge Hunters"
+          <input id="new-assoc-name" type="text" data-i18n="assoc_placeholder" data-i18n-attr="placeholder" placeholder="e.g. North Ridge Hunters"
             onkeydown="if(event.key==='Enter')createAssociation()">
         </div>
-        <button class="btn btn-primary" style="align-self:flex-end" onclick="createAssociation()">Create</button>
+        <button class="btn btn-primary" style="align-self:flex-end" onclick="createAssociation()" data-i18n="btn_create">Create</button>
       </div>
     </div>
     <div id="assoc-list"></div>
@@ -791,7 +791,7 @@
   <!-- ── EDIT ASSOCIATION MODAL ── -->
   <div class="modal-overlay" id="edit-assoc-modal">
     <div class="modal" style="max-width:560px;">
-      <h3>data-i18n="edit_assoc_title">Edit Association</h3>
+      <h3 data-i18n="edit_assoc_title">Edit Association</h3>
       <input type="hidden" id="edit-assoc-id">
       <div class="form-group" style="margin-bottom:1.25rem;">
         <label>Name *</label>
@@ -799,18 +799,18 @@
       </div>
       <div class="form-grid" style="margin-bottom:1.25rem;">
         <div class="form-group">
-          <label>Hunters (hold Ctrl/Cmd for multiple)</label>
+          <label data-i18n="lbl_assoc_hunters">Hunters (hold Ctrl/Cmd for multiple)</label>
           <select id="edit-assoc-hunters" multiple style="height:120px;"></select>
         </div>
         <div class="form-group">
-          <label>Users</label>
+          <label data-i18n="lbl_assoc_users">Users</label>
           <select id="edit-assoc-users" multiple style="height:120px;"></select>
         </div>
       </div>
       <div id="edit-assoc-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="submitEditAssoc()">Save</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('edit-assoc-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-assoc-modal').classList.remove('open')" data-i18n="btn_cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -819,20 +819,20 @@
 <!-- ── SAVE VIEW MODAL ── -->
 <div class="modal-overlay" id="save-modal">
   <div class="modal">
-    <h3>data-i18n="save_view_title">Save This View</h3>
+    <h3 data-i18n="save_view_title">Save This View</h3>
     <div class="form-group" style="margin-bottom:1rem;">
-      <label>View Name</label>
-      <input id="view-name-input" type="text" placeholder="e.g. 2024 Moose Season">
+      <label data-i18n="lbl_view_name">View Name</label>
+      <input id="view-name-input" type="text" data-i18n="view_name_ph" data-i18n-attr="placeholder" placeholder="e.g. 2024 Moose Season">
     </div>
     <div class="form-group" style="margin-bottom:1.25rem;">
       <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;user-select:none;">
         <input type="checkbox" id="view-private-input" style="width:16px;height:16px;accent-color:var(--amber);">
-        <span>Private — only visible to me and admins</span>
+        <span data-i18n="lbl_private">Private — only visible to me and admins</span>
       </label>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="confirmSaveView()">Save</button>
-      <button class="btn btn-ghost" onclick="closeSaveModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmSaveView()" data-i18n="btn_save">Save</button>
+      <button class="btn btn-ghost" onclick="closeSaveModal()" data-i18n="btn_cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -1007,7 +1007,13 @@ async function loadDashboard() {
   // Recent table
   const recent = game.slice(0, 10);
   document.getElementById('recent-table').innerHTML = renderTable(
-    recent.map(g => ({ Hunter: g.hunter_name, Species: `<span class="badge">${g.species}</span>`, Count: g.count, Date: g.hunt_date, Location: g.location || '—' }))
+    recent.map(g => ({
+      [t('col_hunter')]:   g.hunter_name,
+      [t('col_species')]:  `<span class="badge">${g.species}</span>`,
+      [t('col_count')]:    g.count,
+      [t('col_date')]:     g.hunt_date,
+      [t('col_location')]: g.location || t('none_dash'),
+    }))
   );
 }
 
@@ -1368,9 +1374,9 @@ async function addHunter() {
     const msg = e.message || '';
     if (msg.includes('409') || msg.toLowerCase().includes('already')) {
       if (currentUser.role === 'assoc_admin') {
-      toast(`"${name}" already exists. Ask an admin to assign them to this association.`, false);
+      toast(`"${name}" ${t('err_hunter_exists_aa')}`, false);
     } else {
-      toast(`"${name}" already exists`, false);
+      toast(`"${name}" ${t('err_hunter_exists')}`, false);
     }
     } else {
       toast(`Error: ${msg || 'could not reach API'}`, false);
@@ -1382,7 +1388,7 @@ function renderHuntersTable(hunters, totals, allAssocs) {
   if (!hunters.length) return `<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">${t('no_hunters')}</p>`;
   const hasAssocs = allAssocs && allAssocs.length > 0;
   return `<table>
-    <thead><tr><th>Name</th><th>Total Game</th>${hasAssocs ? '<th>Associations</th>' : ''}<th>Member Since</th><th></th></tr></thead>
+    <thead><tr><th>${t('col_name')}</th><th>${t('col_total_game')}</th>${hasAssocs ? `<th>${t('col_assocs')}</th>` : ''}<th>${t('col_member_since')}</th><th></th></tr></thead>
     <tbody>${hunters.map(h => `<tr>
       <td>${escHtml(h.name)}</td>
       <td>${totals[h.id] || 0}</td>
@@ -1421,7 +1427,7 @@ async function submitEditHunter() {
   const name = document.getElementById('edit-hunter-name').value.trim();
   const err  = document.getElementById('edit-hunter-error');
   err.textContent = '';
-  if (!name) { err.textContent = 'Name is required.'; return; }
+  if (!name) { err.textContent = t('err_name_required'); return; }
   const assocIds = Array.from(document.getElementById('edit-hunter-assocs').selectedOptions).map(o => parseInt(o.value));
   try {
     await api('/hunters/' + id, { method: 'PUT', body: JSON.stringify({ name }) });
@@ -1434,7 +1440,7 @@ async function submitEditHunter() {
     await loadAssocSelector();
   } catch(e) {
     const msg = e.message || '';
-    err.textContent = msg.includes('409') ? 'A hunter with that name already exists.' : 'Error: ' + msg;
+    err.textContent = msg.includes('409') ? `"${document.getElementById('edit-hunter-name').value}" ${t('err_hunter_exists')}` : 'Error: ' + msg;
   }
 }
 
@@ -1496,12 +1502,12 @@ async function confirmSaveView() {
 function renderViewCard(v, canEdit) {
   const f = JSON.parse(v.filters || '{}');
   const desc = [
-    f.group_by ? `Group: ${f.group_by}` : '',
-    f.year_from || f.year_to ? `Years: ${f.year_from||''}–${f.year_to||''}` : '',
-    f.species?.length ? `Species: ${f.species.join(', ')}` : '',
-    f.locations?.length ? `Locations: ${f.locations.join(', ')}` : '',
-    `Chart: ${v.chart_type || 'bar'}`,
-    f.show_labels ? 'Labels: on' : '',
+    f.group_by ? `${t('lbl_group_by')}: ${f.group_by}` : '',
+    f.year_from || f.year_to ? `${t('lbl_year_from')}/${t('lbl_year_to')}: ${f.year_from||''}–${f.year_to||''}` : '',
+    f.species?.length ? `${t('lbl_species')}: ${f.species.join(', ')}` : '',
+    f.locations?.length ? `${t('lbl_location')}: ${f.locations.join(', ')}` : '',
+    `${t('lbl_chart_type')}: ${v.chart_type || 'bar'}`,
+    f.show_labels ? `${t('lbl_show_labels')}: ${t('lbl_on')}` : '',
   ].filter(Boolean).join('<br>');
   const editBtn    = canEdit ? `<button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>` : '';
   const delBtn     = canEdit ? `<button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>` : '';
@@ -1551,7 +1557,7 @@ async function loadViews() {
       html += `<div style="grid-column:1/-1;margin-top:0.5rem;">
         <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--amber);
           border-bottom:1px solid rgba(200,134,10,0.2);padding-bottom:0.4rem;margin-bottom:0.75rem;">
-          My Views
+          <span data-i18n="my_views">My Views</span>
         </div>
       </div>
       <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:0.5rem;">
@@ -1636,7 +1642,7 @@ async function submitEditView() {
   const name = document.getElementById('edit-view-name').value.trim();
   const err  = document.getElementById('edit-view-error');
   err.textContent = '';
-  if (!name) { err.textContent = 'Name is required.'; return; }
+  if (!name) { err.textContent = t('err_name_required'); return; }
 
   const getMulti = elId => Array.from(document.getElementById(elId).selectedOptions).map(o => o.value).filter(Boolean);
   const filters = {
@@ -2089,9 +2095,9 @@ function renderUsersTable(users, hunterMap, userAssocMap, allAssocs) {
   const isSelf    = u => u.username === currentUser.username;
   const hasAssocs = allAssocs && allAssocs.length > 0;
   return `<table>
-    <thead><tr><th>Username</th><th>Role</th><th>Linked Hunter</th>${hasAssocs ? '<th>Associations</th>' : ''}<th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
+    <thead><tr><th>${t('col_username')}</th><th>${t('col_role')}</th><th>${t('col_linked_hunter')}</th>${hasAssocs ? `<th>${t('col_assocs')}</th>` : ''}<th>${t('col_status')}</th><th>${t('col_last_login')}</th><th>${t('col_created')}</th><th></th></tr></thead>
     <tbody>${users.map(u => `<tr style="${u.disabled ? 'opacity:0.5;' : ''}">
-      <td>${escHtml(u.username)}${isSelf(u) ? ' <span style="color:var(--amber);font-size:0.72rem;">(you)</span>' : ''}</td>
+      <td>${escHtml(u.username)}${isSelf(u) ? ` <span style="color:var(--amber);font-size:0.72rem;">(${t('you_label')})</span>` : ''}</td>
       <td>
         <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) || u.disabled ? 'disabled' : ''}
           style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;">
@@ -2119,10 +2125,10 @@ function renderUsersTable(users, hunterMap, userAssocMap, allAssocs) {
       </td>` : ''}
       <td>
         ${isSelf(u)
-          ? '<span style="color:var(--sage);font-size:0.78rem;">Active</span>'
+          ? `<span style="color:var(--sage);font-size:0.78rem;">${t('active_label')}</span>`
           : u.disabled
-            ? `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:var(--sage);color:var(--sage);" onclick="toggleDisabled(${u.id}, false)">Enable</button>`
-            : `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:#c87a2a;color:#c87a2a;" onclick="toggleDisabled(${u.id}, true)">Disable</button>`
+            ? `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:var(--sage);color:var(--sage);" onclick="toggleDisabled(${u.id}, false)" data-i18n="btn_enable">Enable</button>`
+            : `<button class="btn btn-ghost" style="padding:0.2rem 0.75rem;font-size:0.75rem;border-color:#c87a2a;color:#c87a2a;" onclick="toggleDisabled(${u.id}, true)" data-i18n="btn_disable">Disable</button>`
         }
       </td>
       <td style="color:var(--fog);font-size:0.82rem;">${u.last_login ? u.last_login.slice(0,16) : '—'}</td>
@@ -2307,7 +2313,7 @@ async function submitEditAssoc() {
   const name = document.getElementById('edit-assoc-name').value.trim();
   const err  = document.getElementById('edit-assoc-error');
   err.textContent = '';
-  if (!name) { err.textContent = 'Name is required.'; return; }
+  if (!name) { err.textContent = t('err_name_required'); return; }
 
   const getMulti = elId => Array.from(document.getElementById(elId).selectedOptions).map(o => parseInt(o.value));
 
@@ -2374,12 +2380,12 @@ async function setupAddEntryAssocSelector() {
     await populateAddForm(validId);
     addAssocDiv.style.display = 'block';
     const hint = addAssocDiv.querySelector('div:last-child');
-    if (hint) hint.textContent = 'Select the association to add entries for.';
+    if (hint) hint.textContent = t('assoc_hint_aa');
     return; // already populated above
   }
 
   const hint = addAssocDiv.querySelector('div:last-child');
-  if (hint) hint.textContent = 'Filter the hunter dropdown by association.';
+  if (hint) hint.textContent = t('assoc_hint_admin');
 
   addAssocDiv.style.display = 'block';
   await populateAddForm(sel.disabled ? null : (sel.value ? parseInt(sel.value) : null));
@@ -2464,7 +2470,7 @@ checkAuth();
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="submitUserAssocs()">Save</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('edit-user-assocs-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-user-assocs-modal').classList.remove('open')" data-i18n="btn_cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -2487,7 +2493,7 @@ checkAuth();
       <div id="edit-hunter-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="submitEditHunter()">Save</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('edit-hunter-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-hunter-modal').classList.remove('open')" data-i18n="btn_cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -2520,17 +2526,17 @@ checkAuth();
           </select>
         </div>
         <div class="form-group">
-          <label>Show Data Labels</label>
+          <label data-i18n="lbl_show_labels">Show Data Labels</label>
           <select id="edit-view-labels">
             <option value="false">Off</option>
             <option value="true">On</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Visibility</label>
+          <label data-i18n="lbl_visibility">Visibility</label>
           <select id="edit-view-private">
-            <option value="false">Public — visible to all</option>
-            <option value="true">Private — only me and admins</option>
+            <option value="false" data-i18n="vis_public">Public — visible to all</option>
+            <option value="true" data-i18n="vis_private">Private — only me and admins</option>
           </select>
         </div>
         <div class="form-group">
@@ -2556,8 +2562,8 @@ checkAuth();
       </div>
       <div id="edit-view-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="submitEditView()">Save Changes</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('edit-view-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitEditView()" data-i18n="btn_save_changes">Save Changes</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-view-modal').classList.remove('open')" data-i18n="btn_cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -2567,17 +2573,17 @@ checkAuth();
     <div class="modal" style="max-width:400px;">
       <h3>data-i18n="change_pw_title">Change Password</h3>
       <div class="form-group" style="margin-bottom:1rem;">
-        <label>New Password (min 8 chars)</label>
+        <label data-i18n="lbl_new_pw">New Password (min 8 chars)</label>
         <input id="new-pw-input" type="password" placeholder="New password">
       </div>
       <div class="form-group" style="margin-bottom:1.25rem;">
-        <label>Confirm Password</label>
+        <label data-i18n="lbl_confirm_pw">Confirm Password</label>
         <input id="new-pw-confirm" type="password" placeholder="Confirm password">
       </div>
       <div id="pw-change-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="submitPasswordChange()">Update Password</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('change-pw-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitPasswordChange()" data-i18n="btn_update_pw">Update Password</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('change-pw-modal').classList.remove('open')" data-i18n="btn_cancel">Cancel</button>
       </div>
     </div>
   </div>
