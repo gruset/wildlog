@@ -74,7 +74,8 @@ def init_db():
             name TEXT NOT NULL,
             filters TEXT NOT NULL,
             chart_type TEXT DEFAULT 'bar',
-            created_at TEXT DEFAULT (datetime('now'))
+            created_at TEXT DEFAULT (datetime('now')),
+            owner_id INTEGER
         );
     ''')
 
@@ -84,6 +85,9 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0")
     if 'hunter_id' not in cols:
         c.execute("ALTER TABLE users ADD COLUMN hunter_id INTEGER")
+    vcols = [r[1] for r in c.execute("PRAGMA table_info(saved_views)").fetchall()]
+    if 'owner_id' not in vcols:
+        c.execute("ALTER TABLE saved_views ADD COLUMN owner_id INTEGER")
 
     if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         default_pw = os.environ.get('ADMIN_PASSWORD', 'changeme')
@@ -492,31 +496,43 @@ def locations_list():
 @login_required
 def get_views():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM saved_views ORDER BY created_at DESC").fetchall()
+    rows = conn.execute('''
+        SELECT sv.*, u.username as owner_username
+        FROM saved_views sv
+        LEFT JOIN users u ON sv.owner_id = u.id
+        ORDER BY sv.owner_id, sv.name
+    ''').fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/views', methods=['POST'])
-@admin_required
+@login_required
 def save_view():
     data = request.json
     if not data or not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
     conn = get_db()
-    conn.execute("INSERT INTO saved_views (name,filters,chart_type) VALUES(?,?,?)",
-                 (data['name'], json.dumps(data.get('filters',{})), data.get('chart_type','bar')))
+    conn.execute("INSERT INTO saved_views (name,filters,chart_type,owner_id) VALUES(?,?,?,?)",
+                 (data['name'], json.dumps(data.get('filters',{})), data.get('chart_type','bar'), session.get('user_id')))
     conn.commit()
     view = conn.execute("SELECT * FROM saved_views ORDER BY id DESC LIMIT 1").fetchone()
     conn.close()
     return jsonify(dict(view)), 201
 
 @app.route('/api/views/<int:view_id>', methods=['PUT'])
-@admin_required
+@login_required
 def update_view(view_id):
     data = request.json
     if not data or not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
     conn = get_db()
+    view = conn.execute("SELECT * FROM saved_views WHERE id=?", (view_id,)).fetchone()
+    if not view:
+        conn.close()
+        return jsonify({'error': 'View not found'}), 404
+    if session.get('role') != 'admin' and view['owner_id'] != session.get('user_id'):
+        conn.close()
+        return jsonify({'error': 'You can only edit your own views'}), 403
     conn.execute(
         "UPDATE saved_views SET name=?, filters=?, chart_type=? WHERE id=?",
         (data['name'], json.dumps(data.get('filters', {})), data.get('chart_type', 'bar'), view_id)
@@ -524,15 +540,20 @@ def update_view(view_id):
     conn.commit()
     view = conn.execute("SELECT * FROM saved_views WHERE id=?", (view_id,)).fetchone()
     conn.close()
-    if not view:
-        return jsonify({'error': 'View not found'}), 404
     return jsonify(dict(view))
 
 
 @app.route('/api/views/<int:view_id>', methods=['DELETE'])
-@admin_required
+@login_required
 def delete_view(view_id):
     conn = get_db()
+    view = conn.execute("SELECT * FROM saved_views WHERE id=?", (view_id,)).fetchone()
+    if not view:
+        conn.close()
+        return jsonify({'error': 'View not found'}), 404
+    if session.get('role') != 'admin' and view['owner_id'] != session.get('user_id'):
+        conn.close()
+        return jsonify({'error': 'You can only delete your own views'}), 403
     conn.execute("DELETE FROM saved_views WHERE id=?", (view_id,))
     conn.commit()
     conn.close()

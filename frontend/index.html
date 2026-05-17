@@ -1254,29 +1254,84 @@ async function confirmSaveView() {
   toast('View saved!');
 }
 
+function renderViewCard(v, canEdit) {
+  const f = JSON.parse(v.filters || '{}');
+  const desc = [
+    f.group_by ? `Group: ${f.group_by}` : '',
+    f.year_from || f.year_to ? `Years: ${f.year_from||''}–${f.year_to||''}` : '',
+    f.species?.length ? `Species: ${f.species.join(', ')}` : '',
+    f.locations?.length ? `Locations: ${f.locations.join(', ')}` : '',
+    `Chart: ${v.chart_type || 'bar'}`,
+    f.show_labels ? 'Labels: on' : '',
+  ].filter(Boolean).join('<br>');
+  const editBtn  = canEdit ? `<button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>` : '';
+  const delBtn   = canEdit ? `<button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>` : '';
+  return `<div class="view-card" onclick="applyView(${v.id})">
+    ${delBtn}${editBtn}
+    <h4>${escHtml(v.name)}</h4>
+    <div class="meta">${desc || 'No filters applied'}<br><span style="color:var(--fog);font-size:0.7rem;">${v.created_at.slice(0,10)}</span></div>
+  </div>`;
+}
+
 async function loadViews() {
   const views = await api('/views');
-  const grid = document.getElementById('views-grid');
+  const grid  = document.getElementById('views-grid');
   if (!views.length) {
     grid.innerHTML = '<p style="color:var(--fog);font-size:0.85rem;">No saved views yet. Use the Leaderboard page to create one.</p>';
     return;
   }
-  grid.innerHTML = views.map(v => {
-    const f = JSON.parse(v.filters || '{}');
-    const desc = [
-      f.group_by ? `Group: ${f.group_by}` : '',
-      f.year_from || f.year_to ? `Years: ${f.year_from||''}–${f.year_to||''}` : '',
-      f.species?.length ? `Species: ${f.species.join(', ')}` : '',
-      f.locations?.length ? `Locations: ${f.locations.join(', ')}` : '',
-      `Chart: ${v.chart_type || 'bar'}`
-    ].filter(Boolean).join('<br>');
-    return `<div class="view-card" onclick="applyView(${v.id})">
-      <button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>
-      <button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>
-      <h4>${v.name}</h4>
-      <div class="meta">${desc || 'No filters applied'}<br><span style="color:var(--fog);font-size:0.7rem;">${v.created_at.slice(0,10)}</span></div>
-    </div>`;
-  }).join('');
+
+  if (currentUser.role === 'admin') {
+    // Group by owner for admins
+    const groups = {};
+    views.forEach(v => {
+      const owner = v.owner_username || 'Unassigned';
+      if (!groups[owner]) groups[owner] = [];
+      groups[owner].push(v);
+    });
+
+    grid.innerHTML = Object.entries(groups).map(([owner, groupViews]) => `
+      <div style="grid-column:1/-1;margin-top:1rem;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--amber);
+          border-bottom:1px solid rgba(200,134,10,0.2);padding-bottom:0.4rem;margin-bottom:0.75rem;">
+          ${escHtml(owner)}
+          <span style="color:var(--fog);font-weight:400;"> — ${groupViews.length} view${groupViews.length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:0.5rem;">
+        ${groupViews.map(v => renderViewCard(v, true)).join('')}
+      </div>
+    `).join('');
+  } else {
+    // Non-admins: show own views with edit/delete, others read-only
+    const own   = views.filter(v => v.owner_id === currentUser.id);
+    const other = views.filter(v => v.owner_id !== currentUser.id);
+    let html = '';
+    if (own.length) {
+      html += `<div style="grid-column:1/-1;margin-top:0.5rem;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--amber);
+          border-bottom:1px solid rgba(200,134,10,0.2);padding-bottom:0.4rem;margin-bottom:0.75rem;">
+          My Views
+        </div>
+      </div>
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:0.5rem;">
+        ${own.map(v => renderViewCard(v, true)).join('')}
+      </div>`;
+    }
+    if (other.length) {
+      html += `<div style="grid-column:1/-1;margin-top:1rem;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--fog);
+          border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:0.4rem;margin-bottom:0.75rem;">
+          Shared Views
+          <span style="font-weight:400;"> — click to apply, editing not available</span>
+        </div>
+      </div>
+      <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-bottom:0.5rem;">
+        ${other.map(v => renderViewCard(v, false)).join('')}
+      </div>`;
+    }
+    grid.innerHTML = html || '<p style="color:var(--fog);font-size:0.85rem;">No saved views yet.</p>';
+  }
 }
 
 async function applyView(id) {
@@ -1375,9 +1430,13 @@ async function submitEditView() {
 
 async function deleteView(id) {
   if (!confirm('Delete this view?')) return;
-  await api('/views/' + id, { method: 'DELETE' });
-  toast('View deleted');
-  loadViews();
+  try {
+    await api('/views/' + id, { method: 'DELETE' });
+    toast('View deleted');
+    loadViews();
+  } catch(e) {
+    toast('Error: ' + (e.message || 'could not delete view'), false);
+  }
 }
 
 
