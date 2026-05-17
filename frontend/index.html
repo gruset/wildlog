@@ -42,39 +42,81 @@
   header {
     background: linear-gradient(135deg, var(--bark) 0%, #1a0e05 100%);
     border-bottom: 2px solid var(--amber);
-    padding: 0 2rem;
+    padding: 0 1.25rem;
     display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     position: sticky; top: 0; z-index: 100;
+    height: 56px; gap: 0.75rem;
   }
   .logo {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 1rem 0;
+    display: flex; align-items: center; gap: 0.75rem;
+    flex-shrink: 0;
   }
   .logo-icon {
-    width: 42px; height: 42px;
+    width: 34px; height: 34px;
     background: var(--amber);
     clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
     flex-shrink: 0;
   }
   .logo h1 {
     font-family: 'Playfair Display', serif;
-    font-size: 1.5rem; font-weight: 900;
-    letter-spacing: 0.03em;
-    color: var(--cream);
+    font-size: 1.3rem; font-weight: 900;
+    letter-spacing: 0.03em; color: var(--cream);
   }
   .logo h1 span { color: var(--gold); }
-  nav { display: flex; gap: 0.25rem; }
-  nav button {
+
+  /* Burger button */
+  .burger {
     background: none; border: none; cursor: pointer;
-    font-family: 'Source Serif 4', serif;
-    font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--fog); padding: 0.5rem 1rem; border-radius: 4px;
-    transition: all 0.2s;
+    padding: 0.4rem; border-radius: 4px;
+    display: flex; flex-direction: column; gap: 5px;
+    flex-shrink: 0;
+  }
+  .burger span {
+    display: block; width: 22px; height: 2px;
+    background: var(--fog); border-radius: 2px;
+    transition: all 0.25s;
+  }
+  .burger:hover span { background: var(--gold); }
+  .burger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .burger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .burger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* Slide-down nav drawer */
+  nav {
+    position: fixed; top: 56px; left: 0; right: 0;
+    background: linear-gradient(180deg, #1a0e05 0%, #0d0805 100%);
+    border-bottom: 2px solid rgba(200,134,10,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    z-index: 99;
+    display: flex; flex-direction: column;
+    transform: translateY(-110%); opacity: 0; pointer-events: none;
+    transition: transform 0.28s cubic-bezier(.4,0,.2,1), opacity 0.2s;
+    max-height: calc(100vh - 56px); overflow-y: auto;
+  }
+  nav.open {
+    transform: translateY(0); opacity: 1; pointer-events: all;
+  }
+  nav button {
+    background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.05);
+    cursor: pointer; font-family: 'Source Serif 4', serif;
+    font-size: 1rem; letter-spacing: 0.04em;
+    color: var(--fog); padding: 1rem 1.5rem;
+    text-align: left; display: flex; align-items: center; gap: 0.75rem;
+    transition: background 0.15s, color 0.15s;
+    min-height: 52px; /* thumb-friendly tap target */
   }
   nav button:hover, nav button.active {
-    color: var(--gold); background: rgba(200,134,10,0.12);
+    color: var(--gold); background: rgba(200,134,10,0.1);
   }
+  nav button.active { border-left: 3px solid var(--amber); padding-left: calc(1.5rem - 3px); }
+
+  /* Nav overlay backdrop */
+  .nav-backdrop {
+    display: none; position: fixed; inset: 0; top: 56px;
+    background: rgba(0,0,0,0.5); z-index: 98;
+  }
+  .nav-backdrop.open { display: block; }
 
   /* ─── LAYOUT ─── */
   .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
@@ -323,48 +365,81 @@
     .stats-row { grid-template-columns: repeat(2, 1fr); }
     .dashboard-grid { grid-template-columns: 1fr; }
     .chart-full { grid-column: auto; }
-    nav button span { display: none; }
   }
   @media (max-width: 600px) {
-    .container { padding: 1rem; }
-    header { padding: 0 1rem; }
+    .container { padding: 0.75rem; }
     .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .filter-grid { grid-template-columns: 1fr; }
+    .chart-wrap { height: 260px; }
+  }
+  /* Assoc selector compact on mobile */
+  @media (max-width: 480px) {
+    #assoc-selector label { display: none; }
+    #site-assoc-select { max-width: 120px; font-size: 0.75rem; }
+    #user-badge { display: none; }
   }
 </style>
 </head>
 <body>
 
+<div class="nav-backdrop" id="nav-backdrop" onclick="closeNav()"></div>
+
 <header style="display:none;">
-  <div class="logo">
+  <button class="burger" id="burger-btn" onclick="toggleNav()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="logo" onclick="showPage('dashboard');closeNav();" style="cursor:pointer;">
     <div class="logo-icon"></div>
     <h1>Wild<span>Log</span></h1>
   </div>
-  <nav>
-    <button class="active" onclick="showPage('dashboard')">📊 <span>Dashboard</span></button>
-    <button onclick="showPage('leaderboard')">🏆 <span>Top List</span></button>
-    <button onclick="showPage('log')">📋 <span>Log</span></button>
-    <button onclick="showPage('add')">➕ <span>Add Entry</span></button>
-    <button onclick="showPage('hunters')">👤 <span>Hunters</span></button>
-    <button onclick="showPage('views')">🔖 <span>Saved Views</span></button>
-    <button onclick="showPage('embeds')">📡 <span>Embeds</span></button>
-    <button id="nav-users" onclick="showPage('users')" style="display:none;">👥 <span>Users</span></button>
-    <button id="nav-assoc" onclick="showPage('associations')" style="display:none;">🏕 <span>Associations</span></button>
-  </nav>
-  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;padding:0 0.75rem;">
+  <div id="assoc-selector" style="display:none;align-items:center;gap:0.5rem;flex:1;justify-content:center;max-width:220px;">
     <label style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);white-space:nowrap;">Association</label>
     <select id="site-assoc-select" onchange="setSiteAssociation(this.value)"
       style="background:rgba(10,8,5,0.6);border:1px solid rgba(200,134,10,0.35);border-radius:4px;
-        color:var(--cream);padding:0.3rem 0.6rem;font-family:inherit;font-size:0.82rem;max-width:160px;">
+        color:var(--cream);padding:0.3rem 0.6rem;font-family:inherit;font-size:0.82rem;min-width:0;flex:1;">
       <option value="">All associations</option>
     </select>
   </div>
-  <div id="user-menu"  style="display:none;align-items:center;gap:0.75rem;padding-left:1rem;border-left:1px solid rgba(200,134,10,0.2);">
-    <span id="user-badge" style="font-size:0.8rem;color:var(--fog);"></span>
-    <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="openChangePw()">🔑 Password</button>
-    <button class="btn btn-ghost" style="font-size:0.75rem;padding:0.35rem 0.75rem;" onclick="doLogout()">Sign Out</button>
+  <div id="user-menu" style="display:none;align-items:center;gap:0.5rem;">
+    <span id="user-badge" style="font-size:0.78rem;color:var(--fog);white-space:nowrap;"></span>
+    <button class="burger" onclick="toggleUserMenu()" id="user-menu-btn" aria-label="User menu" style="flex-direction:row;gap:0;padding:0.5rem;">
+      <span style="font-size:1.2rem;line-height:1;">👤</span>
+    </button>
   </div>
-</nav>
 </header>
+
+<!-- User dropdown menu -->
+<div id="user-dropdown" style="
+  display:none; position:fixed; top:56px; right:0;
+  background:#1a0e05; border:1px solid rgba(200,134,10,0.3);
+  border-top:none; border-radius:0 0 0 8px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:200; min-width:180px;">
+  <button onclick="openChangePw();closeUserMenu();" style="
+    width:100%;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.06);
+    color:var(--cream);font-family:inherit;font-size:0.9rem;padding:0.9rem 1.25rem;
+    text-align:left;cursor:pointer;display:flex;align-items:center;gap:0.6rem;min-height:48px;">
+    🔑 Change Password
+  </button>
+  <button onclick="doLogout();" style="
+    width:100%;background:none;border:none;
+    color:#e07070;font-family:inherit;font-size:0.9rem;padding:0.9rem 1.25rem;
+    text-align:left;cursor:pointer;display:flex;align-items:center;gap:0.6rem;min-height:48px;">
+    ↪ Sign Out
+  </button>
+</div>
+
+<nav id="main-nav">
+  <button onclick="showPage('dashboard');closeNav();">📊 Dashboard</button>
+  <button onclick="showPage('leaderboard');closeNav();">🏆 Top List</button>
+  <button onclick="showPage('log');closeNav();">📋 Game Log</button>
+  <button onclick="showPage('add');closeNav();">➕ Add Entry</button>
+  <button onclick="showPage('hunters');closeNav();">👤 Hunters</button>
+  <button onclick="showPage('views');closeNav();">🔖 Saved Views</button>
+  <button onclick="showPage('embeds');closeNav();">📡 Embeds</button>
+  <button id="nav-users" onclick="showPage('users');closeNav();" style="display:none;">👥 Users</button>
+  <button id="nav-assoc" onclick="showPage('associations');closeNav();" style="display:none;">🏕 Associations</button>
+</nav>
 
 <div class="container" style="display:none;">
 
@@ -1711,6 +1786,44 @@ async function loadEmbedsPage() {
 }
 
 
+
+// ─── NAV ─────────────────────────────────────────────────
+function toggleNav() {
+  const nav  = document.getElementById('main-nav');
+  const btn  = document.getElementById('burger-btn');
+  const back = document.getElementById('nav-backdrop');
+  const open = nav.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  back.classList.toggle('open', open);
+  if (open) closeUserMenu();
+}
+
+function closeNav() {
+  document.getElementById('main-nav').classList.remove('open');
+  document.getElementById('burger-btn').classList.remove('open');
+  document.getElementById('nav-backdrop').classList.remove('open');
+}
+
+function toggleUserMenu() {
+  const dd = document.getElementById('user-dropdown');
+  const open = dd.style.display === 'block';
+  dd.style.display = open ? 'none' : 'block';
+  if (!open) closeNav();
+}
+
+function closeUserMenu() {
+  document.getElementById('user-dropdown').style.display = 'none';
+}
+
+// Close user dropdown on outside click
+document.addEventListener('click', e => {
+  const btn = document.getElementById('user-menu-btn');
+  const dd  = document.getElementById('user-dropdown');
+  if (dd && btn && !btn.contains(e.target) && !dd.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+});
+
 // ─── ASSOCIATION STATE ───────────────────────────────
 let currentAssocId = null;  // null = all / site-wide filter
 
@@ -1800,7 +1913,7 @@ async function showApp() {
 
 function applyRoleRestrictions() {
   if (currentUser.role === 'admin') return;
-  document.querySelectorAll('nav button').forEach(btn => {
+  document.querySelectorAll('#main-nav button').forEach(btn => {
     const text = btn.textContent;
     // Viewers: hide Add Entry, Embeds, Hunters
     // Users: hide Embeds and Hunters, but keep Add Entry
@@ -1843,8 +1956,11 @@ async function doLogout() {
   currentUser = null;
   // Reset UI
   document.getElementById('user-menu').style.display = 'none';
+  document.getElementById('user-dropdown').style.display = 'none';
   document.getElementById('nav-users').style.display = 'none';
-  document.querySelectorAll('nav button').forEach(b => b.style.display = '');
+  document.getElementById('nav-assoc').style.display = 'none';
+  closeNav();
+  document.querySelectorAll('#main-nav button').forEach(b => b.style.display = '');
   showLoginScreen();
 }
 
