@@ -314,6 +314,25 @@ def add_hunter():
         conn.close()
         return jsonify({'error': 'Hunter already exists'}), 409
 
+@app.route('/api/hunters/<int:hunter_id>', methods=['PUT'])
+@admin_required
+def update_hunter(hunter_id):
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    conn = get_db()
+    try:
+        conn.execute("UPDATE hunters SET name=? WHERE id=?", (name, hunter_id))
+        conn.commit()
+        hunter = conn.execute("SELECT * FROM hunters WHERE id=?", (hunter_id,)).fetchone()
+        conn.close()
+        return jsonify(dict(hunter))
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'A hunter with that name already exists'}), 409
+
+
 @app.route('/api/hunters/<int:hunter_id>', methods=['DELETE'])
 @admin_required
 def delete_hunter(hunter_id):

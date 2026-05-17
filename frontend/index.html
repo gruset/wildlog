@@ -1112,10 +1112,7 @@ async function loadHunters() {
   const stats = await api('/stats/leaderboard');
   const totals = Object.fromEntries(stats.map(r => [r.hunter_id, r.total]));
 
-  document.getElementById('hunters-table').innerHTML = renderTable(
-    hunters.map(h => ({ _id: h.id, Name: h.name, 'Total Game': totals[h.id] || 0, 'Member Since': h.created_at.slice(0,10) })),
-    'deleteHunter'
-  );
+  document.getElementById('hunters-table').innerHTML = renderHuntersTable(hunters, totals);
   populateFilterDropdowns();
 }
 
@@ -1135,6 +1132,49 @@ async function addHunter() {
     } else {
       toast(`Error: ${msg || 'could not reach API'}`, false);
     }
+  }
+}
+
+function renderHuntersTable(hunters, totals) {
+  if (!hunters.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No hunters yet.</p>';
+  return `<table>
+    <thead><tr><th>Name</th><th>Total Game</th><th>Member Since</th><th></th></tr></thead>
+    <tbody>${hunters.map(h => `<tr>
+      <td>${escHtml(h.name)}</td>
+      <td>${totals[h.id] || 0}</td>
+      <td style="color:var(--fog);font-size:0.85rem;">${h.created_at.slice(0,10)}</td>
+      <td style="display:flex;gap:0.4rem;">
+        <button class="btn btn-ghost" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openEditHunter(${h.id},'${escHtml(h.name)}')">✎</button>
+        <button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deleteHunter(${h.id})">✕</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function openEditHunter(id, currentName) {
+  document.getElementById('edit-hunter-id').value = id;
+  document.getElementById('edit-hunter-name').value = currentName;
+  document.getElementById('edit-hunter-error').textContent = '';
+  document.getElementById('edit-hunter-modal').classList.add('open');
+  setTimeout(() => document.getElementById('edit-hunter-name').select(), 50);
+}
+
+async function submitEditHunter() {
+  const id   = document.getElementById('edit-hunter-id').value;
+  const name = document.getElementById('edit-hunter-name').value.trim();
+  const err  = document.getElementById('edit-hunter-error');
+  err.textContent = '';
+  if (!name) { err.textContent = 'Name is required.'; return; }
+  try {
+    await api('/hunters/' + id, { method: 'PUT', body: JSON.stringify({ name }) });
+    document.getElementById('edit-hunter-modal').classList.remove('open');
+    toast('Hunter updated!');
+    hunters = await api('/hunters');
+    await loadHunters();
+    populateFilterDropdowns();
+  } catch(e) {
+    const msg = e.message || '';
+    err.textContent = msg.includes('409') ? 'A hunter with that name already exists.' : 'Error: ' + msg;
   }
 }
 
@@ -1694,6 +1734,24 @@ checkAuth();
         </div>
         <button class="btn btn-primary" style="width:100%;padding:0.75rem;" onclick="doLogin()">Sign In</button>
         <div id="login-error" style="margin-top:0.75rem;color:#e07070;font-size:0.82rem;text-align:center;min-height:1.2em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EDIT HUNTER MODAL ── -->
+  <div class="modal-overlay" id="edit-hunter-modal">
+    <div class="modal" style="max-width:380px;">
+      <h3>Edit Hunter</h3>
+      <input type="hidden" id="edit-hunter-id">
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label>Name *</label>
+        <input id="edit-hunter-name" type="text" placeholder="Hunter name"
+          onkeydown="if(event.key==='Enter')submitEditHunter()">
+      </div>
+      <div id="edit-hunter-error" style="color:#e07070;font-size:0.82rem;margin-bottom:0.75rem;min-height:1em;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitEditHunter()">Save</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-hunter-modal').classList.remove('open')">Cancel</button>
       </div>
     </div>
   </div>
