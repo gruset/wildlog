@@ -473,6 +473,7 @@
 
   <!-- ── ADD ENTRY ── -->
   <div id="page-add" class="page">
+    <div id="user-hunter-notice" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(61,90,62,0.2);border:1px solid rgba(122,158,126,0.3);border-radius:6px;font-size:0.85rem;color:var(--sage);"></div>
     <div class="card" style="max-width:700px;">
       <div class="card-title">Add Game Entry</div>
       <div class="form-grid" id="entry-form">
@@ -638,6 +639,7 @@
           <label>Role</label>
           <select id="new-user-role">
             <option value="viewer">Viewer — read only</option>
+            <option value="user">User — can log own game</option>
             <option value="admin">Admin — full access</option>
           </select>
         </div>
@@ -700,7 +702,19 @@ function showPage(name) {
   });
   if (name === 'leaderboard') loadLeaderboard();
   if (name === 'log') loadLog();
-  if (name === 'add') populateAddForm();
+  if (name === 'add') {
+    populateAddForm();
+    const notice = document.getElementById('user-hunter-notice');
+    if (currentUser.role === 'user') {
+      const h = hunters.find(x => x.id === currentUser.hunter_id);
+      notice.style.display = 'block';
+      notice.textContent = h
+        ? `Logging as: ${h.name}`
+        : 'Your account is not linked to a hunter — contact an admin.';
+    } else {
+      notice.style.display = 'none';
+    }
+  }
   if (name === 'hunters') loadHunters();
   if (name === 'views') loadViews();
   if (name === 'embeds') loadEmbedsPage();
@@ -1075,7 +1089,14 @@ async function deleteEntry(id) {
 // ─── ADD ENTRY ───────────────────────────────────────────
 function populateAddForm() {
   const sel = document.getElementById('add-hunter');
-  sel.innerHTML = hunters.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+  // 'user' role can only select their own linked hunter
+  const allowed = currentUser.role === 'user'
+    ? hunters.filter(h => h.id === currentUser.hunter_id)
+    : hunters;
+  sel.innerHTML = allowed.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+  if (!allowed.length && currentUser.role === 'user') {
+    sel.innerHTML = '<option value="">No hunter linked to your account</option>';
+  }
   if (!document.getElementById('add-date').value)
     document.getElementById('add-date').value = new Date().toISOString().slice(0,10);
 }
@@ -1533,15 +1554,18 @@ async function showApp() {
 }
 
 function applyRoleRestrictions() {
-  if (currentUser.role !== 'admin') {
-    // Viewers see dashboard, leaderboard, log and saved views but not add/hunters/embeds/users
-    document.querySelectorAll('nav button').forEach(btn => {
-      const text = btn.textContent;
-      if (text.includes('Add Entry') || text.includes('Embeds') || text.includes('Hunters')) {
-        btn.style.display = 'none';
-      }
-    });
-  }
+  if (currentUser.role === 'admin') return;
+  document.querySelectorAll('nav button').forEach(btn => {
+    const text = btn.textContent;
+    // Viewers: hide Add Entry, Embeds, Hunters
+    // Users: hide Embeds and Hunters, but keep Add Entry
+    if (text.includes('Embeds') || text.includes('Hunters')) {
+      btn.style.display = 'none';
+    }
+    if (currentUser.role === 'viewer' && text.includes('Add Entry')) {
+      btn.style.display = 'none';
+    }
+  });
 }
 
 async function doLogin() {
@@ -1618,22 +1642,33 @@ async function submitPasswordChange() {
 
 // ─── USERS PAGE ──────────────────────────────────────────
 async function loadUsersPage() {
-  const users = await api('/users');
-  document.getElementById('users-table').innerHTML = renderUsersTable(users);
+  const [users, hunterList] = await Promise.all([api('/users'), api('/hunters')]);
+  const hunterMap = Object.fromEntries(hunterList.map(h => [h.id, h.name]));
+  document.getElementById('users-table').innerHTML = renderUsersTable(users, hunterMap);
 }
 
-function renderUsersTable(users) {
+function renderUsersTable(users, hunterMap) {
   if (!users.length) return '<p style="color:var(--fog);padding:1rem;font-size:0.85rem;">No users.</p>';
   const isSelf = u => u.username === currentUser.username;
   return `<table>
-    <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>Role</th><th>Linked Hunter</th><th>Status</th><th>Last Login</th><th>Created</th><th></th></tr></thead>
     <tbody>${users.map(u => `<tr style="${u.disabled ? 'opacity:0.5;' : ''}">
       <td>${escHtml(u.username)}${isSelf(u) ? ' <span style="color:var(--amber);font-size:0.72rem;">(you)</span>' : ''}</td>
       <td>
         <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) || u.disabled ? 'disabled' : ''}
           style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;">
           <option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>
+          <option value="user"   ${u.role==='user'  ?'selected':''}>User</option>
           <option value="admin"  ${u.role==='admin' ?'selected':''}>Admin</option>
+        </select>
+      </td>
+      <td>
+        <select onchange="linkHunter(${u.id}, this.value)"
+          style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;max-width:130px;">
+          <option value="">— none —</option>
+          ${Object.entries(hunterMap).map(([hid,hname]) =>
+            `<option value="${hid}" ${u.hunter_id == hid ? 'selected' : ''}>${escHtml(hname)}</option>`
+          ).join('')}
         </select>
       </td>
       <td>
@@ -1686,6 +1721,16 @@ async function deleteUser(id, username) {
     toast('User deleted');
     loadUsersPage();
   } catch(e) { toast('Error deleting user', false); }
+}
+
+async function linkHunter(userId, hunterId) {
+  try {
+    await api('/users/' + userId + '/hunter', {
+      method: 'POST',
+      body: JSON.stringify({ hunter_id: hunterId ? parseInt(hunterId) : null })
+    });
+    toast('Hunter link updated');
+  } catch(e) { toast('Error linking hunter', false); loadUsersPage(); }
 }
 
 async function changeRole(id, role) {

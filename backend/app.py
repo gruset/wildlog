@@ -39,7 +39,8 @@ def init_db():
             role TEXT NOT NULL DEFAULT 'viewer',
             created_at TEXT DEFAULT (datetime('now')),
             last_login TEXT,
-            disabled INTEGER NOT NULL DEFAULT 0
+            disabled INTEGER NOT NULL DEFAULT 0,
+            hunter_id INTEGER
         );
         CREATE TABLE IF NOT EXISTS hunters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,10 +78,12 @@ def init_db():
         );
     ''')
 
-    # Migration: add disabled column to existing DBs
+    # Migrations: add columns to existing DBs
     cols = [r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
     if 'disabled' not in cols:
         c.execute("ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0")
+    if 'hunter_id' not in cols:
+        c.execute("ALTER TABLE users ADD COLUMN hunter_id INTEGER")
 
     if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         default_pw = os.environ.get('ADMIN_PASSWORD', 'changeme')
@@ -135,6 +138,18 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def user_or_admin_required(f):
+    """Allow admins and users (role='user') but not viewers."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('user_id'):
+            return jsonify({'error': 'Authentication required', 'login': True}), 401
+        if session.get('role') not in ('admin', 'user'):
+            return jsonify({'error': 'Access denied'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
 def cors_public(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -164,9 +179,10 @@ def login():
         conn.commit()
         conn.close()
         session.permanent = True
-        session['user_id']  = user['id']
-        session['username'] = user['username']
-        session['role']     = user['role']
+        session['user_id']   = user['id']
+        session['username']  = user['username']
+        session['role']      = user['role']
+        session['hunter_id'] = user['hunter_id']
         return jsonify({'id': user['id'], 'username': user['username'], 'role': user['role']})
     conn.close()
     return jsonify({'error': 'Invalid username or password'}), 401
@@ -180,7 +196,11 @@ def logout():
 def me():
     if not session.get('user_id'):
         return jsonify({'authenticated': False}), 401
-    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role']})
+    conn = get_db()
+    user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+    conn.close()
+    hunter_id = user['hunter_id'] if user else None
+    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role'], 'hunter_id': hunter_id})
 
 
 # ── Users ────────────────────────────────────────────────
@@ -190,7 +210,7 @@ def me():
 def get_users():
     conn = get_db()
     rows = conn.execute(
-        "SELECT id,username,role,created_at,last_login,disabled FROM users ORDER BY username"
+        "SELECT id,username,role,created_at,last_login,disabled,hunter_id FROM users ORDER BY username"
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -204,8 +224,8 @@ def create_user():
     role     = data.get('role', 'viewer')
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
-    if role not in ('admin', 'viewer'):
-        return jsonify({'error': 'Role must be admin or viewer'}), 400
+    if role not in ('admin', 'viewer', 'user'):
+        return jsonify({'error': 'Role must be admin, viewer or user'}), 400
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -250,6 +270,18 @@ def change_password(user_id):
     conn.close()
     return jsonify({'success': True})
 
+@app.route('/api/users/<int:user_id>/hunter', methods=['POST'])
+@admin_required
+def set_user_hunter(user_id):
+    data = request.json or {}
+    hunter_id = data.get('hunter_id')  # None to unlink
+    conn = get_db()
+    conn.execute("UPDATE users SET hunter_id=? WHERE id=?", (hunter_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
 @app.route('/api/users/<int:user_id>/role', methods=['POST'])
 @admin_required
 def change_role(user_id):
@@ -257,8 +289,8 @@ def change_role(user_id):
         return jsonify({'error': 'Cannot change your own role'}), 400
     data = request.json or {}
     role = data.get('role')
-    if role not in ('admin', 'viewer'):
-        return jsonify({'error': 'Role must be admin or viewer'}), 400
+    if role not in ('admin', 'viewer', 'user'):
+        return jsonify({'error': 'Role must be admin, viewer or user'}), 400
     conn = get_db()
     conn.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
     conn.commit()
@@ -358,11 +390,22 @@ def get_game():
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/game', methods=['POST'])
-@admin_required
+@user_or_admin_required
 def add_game():
     data = request.json
     if not data or not all(data.get(k) for k in ['hunter_id','species','hunt_date']):
         return jsonify({'error': 'hunter_id, species and hunt_date are required'}), 400
+
+    # 'user' role may only log for their own linked hunter
+    if session.get('role') == 'user':
+        conn = get_db()
+        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        conn.close()
+        if not user or not user['hunter_id']:
+            return jsonify({'error': 'Your account is not linked to a hunter. Ask an admin to link your account.'}), 403
+        if int(data['hunter_id']) != user['hunter_id']:
+            return jsonify({'error': 'You can only log game for your own hunter.'}), 403
+
     conn = get_db()
     conn.execute(
         "INSERT INTO game_log (hunter_id,species,count,hunt_date,location,notes) VALUES(?,?,?,?,?,?)",
