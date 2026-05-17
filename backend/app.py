@@ -382,23 +382,10 @@ def delete_hunter(hunter_id):
 @login_required
 def get_game():
     conn = get_db()
-    if session.get('role') == 'user':
-        # Users see only their own linked hunter's entries
-        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
-        hunter_id = user['hunter_id'] if user else None
-        if hunter_id:
-            rows = conn.execute('''
-                SELECT g.*, h.name as hunter_name FROM game_log g
-                JOIN hunters h ON g.hunter_id=h.id
-                WHERE g.hunter_id=? ORDER BY g.hunt_date DESC
-            ''', (hunter_id,)).fetchall()
-        else:
-            rows = []
-    else:
-        rows = conn.execute('''
-            SELECT g.*, h.name as hunter_name FROM game_log g
-            JOIN hunters h ON g.hunter_id=h.id ORDER BY g.hunt_date DESC
-        ''').fetchall()
+    rows = conn.execute('''
+        SELECT g.*, h.name as hunter_name FROM game_log g
+        JOIN hunters h ON g.hunter_id=h.id ORDER BY g.hunt_date DESC
+    ''').fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
