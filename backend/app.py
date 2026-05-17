@@ -75,7 +75,8 @@ def init_db():
             filters TEXT NOT NULL,
             chart_type TEXT DEFAULT 'bar',
             created_at TEXT DEFAULT (datetime('now')),
-            owner_id INTEGER
+            owner_id INTEGER,
+            is_private INTEGER NOT NULL DEFAULT 0
         );
     ''')
 
@@ -88,6 +89,8 @@ def init_db():
     vcols = [r[1] for r in c.execute("PRAGMA table_info(saved_views)").fetchall()]
     if 'owner_id' not in vcols:
         c.execute("ALTER TABLE saved_views ADD COLUMN owner_id INTEGER")
+    if 'is_private' not in vcols:
+        c.execute("ALTER TABLE saved_views ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0")
 
     if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         default_pw = os.environ.get('ADMIN_PASSWORD', 'changeme')
@@ -496,12 +499,23 @@ def locations_list():
 @login_required
 def get_views():
     conn = get_db()
-    rows = conn.execute('''
-        SELECT sv.*, u.username as owner_username
-        FROM saved_views sv
-        LEFT JOIN users u ON sv.owner_id = u.id
-        ORDER BY sv.owner_id, sv.name
-    ''').fetchall()
+    uid  = session.get('user_id')
+    role = session.get('role')
+    if role == 'admin':
+        # Admins see everything
+        rows = conn.execute('''
+            SELECT sv.*, u.username as owner_username
+            FROM saved_views sv LEFT JOIN users u ON sv.owner_id = u.id
+            ORDER BY sv.owner_id, sv.name
+        ''').fetchall()
+    else:
+        # Others see: all public views + their own private views
+        rows = conn.execute('''
+            SELECT sv.*, u.username as owner_username
+            FROM saved_views sv LEFT JOIN users u ON sv.owner_id = u.id
+            WHERE sv.is_private = 0 OR sv.owner_id = ?
+            ORDER BY sv.owner_id, sv.name
+        ''', (uid,)).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
@@ -512,8 +526,9 @@ def save_view():
     if not data or not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
     conn = get_db()
-    conn.execute("INSERT INTO saved_views (name,filters,chart_type,owner_id) VALUES(?,?,?,?)",
-                 (data['name'], json.dumps(data.get('filters',{})), data.get('chart_type','bar'), session.get('user_id')))
+    is_private = 1 if data.get('is_private') else 0
+    conn.execute("INSERT INTO saved_views (name,filters,chart_type,owner_id,is_private) VALUES(?,?,?,?,?)",
+                 (data['name'], json.dumps(data.get('filters',{})), data.get('chart_type','bar'), session.get('user_id'), is_private))
     conn.commit()
     view = conn.execute("SELECT * FROM saved_views ORDER BY id DESC LIMIT 1").fetchone()
     conn.close()
@@ -533,9 +548,10 @@ def update_view(view_id):
     if session.get('role') != 'admin' and view['owner_id'] != session.get('user_id'):
         conn.close()
         return jsonify({'error': 'You can only edit your own views'}), 403
+    is_private = 1 if data.get('is_private') else 0
     conn.execute(
-        "UPDATE saved_views SET name=?, filters=?, chart_type=? WHERE id=?",
-        (data['name'], json.dumps(data.get('filters', {})), data.get('chart_type', 'bar'), view_id)
+        "UPDATE saved_views SET name=?, filters=?, chart_type=?, is_private=? WHERE id=?",
+        (data['name'], json.dumps(data.get('filters', {})), data.get('chart_type', 'bar'), is_private, view_id)
     )
     conn.commit()
     view = conn.execute("SELECT * FROM saved_views WHERE id=?", (view_id,)).fetchone()

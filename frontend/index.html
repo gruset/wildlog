@@ -659,11 +659,17 @@
 <div class="modal-overlay" id="save-modal">
   <div class="modal">
     <h3>Save This View</h3>
-    <div class="form-group">
+    <div class="form-group" style="margin-bottom:1rem;">
       <label>View Name</label>
       <input id="view-name-input" type="text" placeholder="e.g. 2024 Moose Season">
     </div>
-    <div class="btn-row" style="margin-top:1.25rem;">
+    <div class="form-group" style="margin-bottom:1.25rem;">
+      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="view-private-input" style="width:16px;height:16px;accent-color:var(--amber);">
+        <span>Private — only visible to me and admins</span>
+      </label>
+    </div>
+    <div class="btn-row">
       <button class="btn btn-primary" onclick="confirmSaveView()">Save</button>
       <button class="btn btn-ghost" onclick="closeSaveModal()">Cancel</button>
     </div>
@@ -1236,6 +1242,7 @@ let pendingFilters = null;
 function openSaveViewModal() {
   pendingFilters = currentFilters;
   document.getElementById('view-name-input').value = '';
+  document.getElementById('view-private-input').checked = false;
   document.getElementById('save-modal').classList.add('open');
 }
 
@@ -1248,7 +1255,7 @@ async function confirmSaveView() {
   if (!name) { toast('Enter a name', false); return; }
   await api('/views', {
     method: 'POST',
-    body: JSON.stringify({ name, filters: { ...pendingFilters, show_labels: showLabels }, chart_type: currentChartType })
+    body: JSON.stringify({ name, filters: { ...pendingFilters, show_labels: showLabels }, chart_type: currentChartType, is_private: document.getElementById('view-private-input').checked })
   });
   closeSaveModal();
   toast('View saved!');
@@ -1264,11 +1271,12 @@ function renderViewCard(v, canEdit) {
     `Chart: ${v.chart_type || 'bar'}`,
     f.show_labels ? 'Labels: on' : '',
   ].filter(Boolean).join('<br>');
-  const editBtn  = canEdit ? `<button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>` : '';
-  const delBtn   = canEdit ? `<button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>` : '';
+  const editBtn    = canEdit ? `<button class="del-btn" style="right:2.2rem;color:var(--fog);" onclick="event.stopPropagation();openEditView(${v.id})" title="Edit">✎</button>` : '';
+  const delBtn     = canEdit ? `<button class="del-btn" onclick="event.stopPropagation();deleteView(${v.id})" title="Delete">✕</button>` : '';
+  const privateBadge = v.is_private ? `<span style="font-size:0.68rem;background:rgba(200,134,10,0.15);color:var(--amber);border:1px solid rgba(200,134,10,0.3);border-radius:10px;padding:0.1rem 0.5rem;margin-left:0.4rem;">🔒 Private</span>` : '';
   return `<div class="view-card" onclick="applyView(${v.id})">
     ${delBtn}${editBtn}
-    <h4>${escHtml(v.name)}</h4>
+    <h4>${escHtml(v.name)}${privateBadge}</h4>
     <div class="meta">${desc || 'No filters applied'}<br><span style="color:var(--fog);font-size:0.7rem;">${v.created_at.slice(0,10)}</span></div>
   </div>`;
 }
@@ -1365,7 +1373,8 @@ async function openEditView(id) {
   document.getElementById('edit-view-name').value = v.name;
   document.getElementById('edit-view-groupby').value = f.group_by || 'hunter';
   document.getElementById('edit-view-chart').value = v.chart_type || 'bar';
-  document.getElementById('edit-view-labels').value = String(f.show_labels === true || f.show_labels === 'true');
+  document.getElementById('edit-view-labels').value  = String(f.show_labels === true || f.show_labels === 'true');
+  document.getElementById('edit-view-private').value = String(v.is_private === 1 || v.is_private === true);
   document.getElementById('edit-view-year-from').value = f.year_from || '';
   document.getElementById('edit-view-year-to').value   = f.year_to   || '';
   document.getElementById('edit-view-error').textContent = '';
@@ -1419,7 +1428,8 @@ async function submitEditView() {
       body: JSON.stringify({
         name,
         filters,
-        chart_type: document.getElementById('edit-view-chart').value,
+        chart_type:  document.getElementById('edit-view-chart').value,
+        is_private:  document.getElementById('edit-view-private').value === 'true',
       })
     });
     document.getElementById('edit-view-modal').classList.remove('open');
@@ -1907,6 +1917,13 @@ checkAuth();
           <select id="edit-view-labels">
             <option value="false">Off</option>
             <option value="true">On</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Visibility</label>
+          <select id="edit-view-private">
+            <option value="false">Public — visible to all</option>
+            <option value="true">Private — only me and admins</option>
           </select>
         </div>
         <div class="form-group">
