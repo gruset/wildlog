@@ -160,6 +160,30 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def assoc_admin_or_above(f):
+    """Allow admin and assoc_admin roles."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('user_id'):
+            return jsonify({'error': 'Authentication required', 'login': True}), 401
+        if session.get('role') not in ('admin', 'assoc_admin'):
+            return jsonify({'error': 'Association admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def any_active_role(f):
+    """Allow admin, assoc_admin, and user — not viewer."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('user_id'):
+            return jsonify({'error': 'Authentication required', 'login': True}), 401
+        if session.get('role') not in ('admin', 'assoc_admin', 'user'):
+            return jsonify({'error': 'Access denied'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
 def user_or_admin_required(f):
     """Allow admins and users (role='user') but not viewers."""
     @wraps(f)
@@ -246,8 +270,8 @@ def create_user():
     role     = data.get('role', 'viewer')
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
-    if role not in ('admin', 'viewer', 'user'):
-        return jsonify({'error': 'Role must be admin, viewer or user'}), 400
+    if role not in ('admin', 'assoc_admin', 'viewer', 'user'):
+        return jsonify({'error': 'Role must be admin, assoc_admin, viewer or user'}), 400
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -311,8 +335,8 @@ def change_role(user_id):
         return jsonify({'error': 'Cannot change your own role'}), 400
     data = request.json or {}
     role = data.get('role')
-    if role not in ('admin', 'viewer', 'user'):
-        return jsonify({'error': 'Role must be admin, viewer or user'}), 400
+    if role not in ('admin', 'assoc_admin', 'viewer', 'user'):
+        return jsonify({'error': 'Role must be admin, assoc_admin, viewer or user'}), 400
     conn = get_db()
     conn.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
     conn.commit()
@@ -603,7 +627,7 @@ def get_hunters():
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/hunters', methods=['POST'])
-@admin_required
+@assoc_admin_or_above
 def add_hunter():
     data = request.json
     if not data or not data.get('name', '').strip():
@@ -613,20 +637,35 @@ def add_hunter():
         conn.execute("INSERT INTO hunters (name) VALUES (?)", (data['name'].strip(),))
         conn.commit()
         hunter = conn.execute("SELECT * FROM hunters WHERE name=?", (data['name'].strip(),)).fetchone()
+        # assoc_admin: auto-assign new hunter to their active association
+        if session.get('role') == 'assoc_admin':
+            assoc_id = session.get('site_assoc_id')
+            if assoc_id:
+                conn.execute("INSERT OR IGNORE INTO hunter_associations (hunter_id,association_id) VALUES (?,?)",
+                             (hunter['id'], assoc_id))
+                conn.commit()
         conn.close()
         return jsonify(dict(hunter)), 201
     except sqlite3.IntegrityError:
         conn.close()
-        return jsonify({'error': 'Hunter already exists'}), 409
+        # Return a specific code so frontend can distinguish "exists" from other errors
+        return jsonify({'error': 'Hunter already exists', 'code': 'hunter_exists'}), 409
 
 @app.route('/api/hunters/<int:hunter_id>', methods=['PUT'])
-@admin_required
+@assoc_admin_or_above
 def update_hunter(hunter_id):
     data = request.json or {}
     name = (data.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     conn = get_db()
+    if session.get('role') == 'assoc_admin':
+        assoc_id = session.get('site_assoc_id')
+        linked = conn.execute("SELECT 1 FROM hunter_associations WHERE hunter_id=? AND association_id=?",
+                              (hunter_id, assoc_id)).fetchone()
+        if not linked:
+            conn.close()
+            return jsonify({'error': 'Hunter not in your association'}), 403
     try:
         conn.execute("UPDATE hunters SET name=? WHERE id=?", (name, hunter_id))
         conn.commit()
@@ -636,6 +675,23 @@ def update_hunter(hunter_id):
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({'error': 'A hunter with that name already exists'}), 409
+
+
+@app.route('/api/hunters/<int:hunter_id>/unassign', methods=['POST'])
+@assoc_admin_or_above
+def unassign_hunter(hunter_id):
+    """Remove a hunter from the assoc_admin's active association (does not delete the hunter)."""
+    if session.get('role') != 'assoc_admin':
+        return jsonify({'error': 'Use DELETE to remove hunter entirely'}), 400
+    assoc_id = session.get('site_assoc_id')
+    if not assoc_id:
+        return jsonify({'error': 'No active association selected'}), 400
+    conn = get_db()
+    conn.execute("DELETE FROM hunter_associations WHERE hunter_id=? AND association_id=?",
+                 (hunter_id, assoc_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 
 @app.route('/api/hunters/<int:hunter_id>', methods=['DELETE'])
@@ -664,21 +720,31 @@ def get_game():
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/game', methods=['POST'])
-@user_or_admin_required
+@any_active_role
 def add_game():
     data = request.json
     if not data or not all(data.get(k) for k in ['hunter_id','species','hunt_date']):
         return jsonify({'error': 'hunter_id, species and hunt_date are required'}), 400
 
-    # 'user' role may only log for their own linked hunter
-    if session.get('role') == 'user':
+    role = session.get('role')
+    if role == 'user':
         conn = get_db()
-        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        user_row = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
         conn.close()
-        if not user or not user['hunter_id']:
+        if not user_row or not user_row['hunter_id']:
             return jsonify({'error': 'Your account is not linked to a hunter. Ask an admin to link your account.'}), 403
-        if int(data['hunter_id']) != user['hunter_id']:
+        if int(data['hunter_id']) != user_row['hunter_id']:
             return jsonify({'error': 'You can only log game for your own hunter.'}), 403
+    elif role == 'assoc_admin':
+        assoc_id = session.get('site_assoc_id')
+        if not assoc_id:
+            return jsonify({'error': 'Select an active association first.'}), 400
+        conn = get_db()
+        linked = conn.execute("SELECT 1 FROM hunter_associations WHERE hunter_id=? AND association_id=?",
+                              (int(data['hunter_id']), assoc_id)).fetchone()
+        conn.close()
+        if not linked:
+            return jsonify({'error': 'Hunter is not in your active association.'}), 403
 
     conn = get_db()
     conn.execute(
@@ -691,20 +757,27 @@ def add_game():
     return jsonify({'success': True}), 201
 
 @app.route('/api/game/<int:game_id>', methods=['DELETE'])
-@user_or_admin_required
+@any_active_role
 def delete_game(game_id):
     conn = get_db()
-    if session.get('role') == 'user':
-        # Verify the entry belongs to the user's linked hunter
-        user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
-        hunter_id = user['hunter_id'] if user else None
-        entry = conn.execute("SELECT hunter_id FROM game_log WHERE id=?", (game_id,)).fetchone()
-        if not entry:
-            conn.close()
-            return jsonify({'error': 'Entry not found'}), 404
+    role = session.get('role')
+    entry = conn.execute("SELECT hunter_id FROM game_log WHERE id=?", (game_id,)).fetchone()
+    if not entry:
+        conn.close()
+        return jsonify({'error': 'Entry not found'}), 404
+    if role == 'user':
+        user_row = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
+        hunter_id = user_row['hunter_id'] if user_row else None
         if not hunter_id or entry['hunter_id'] != hunter_id:
             conn.close()
             return jsonify({'error': 'You can only delete your own entries'}), 403
+    elif role == 'assoc_admin':
+        assoc_id = session.get('site_assoc_id')
+        linked = conn.execute("SELECT 1 FROM hunter_associations WHERE hunter_id=? AND association_id=?",
+                              (entry['hunter_id'], assoc_id)).fetchone()
+        if not linked:
+            conn.close()
+            return jsonify({'error': 'You can only delete entries for hunters in your association'}), 403
     conn.execute("DELETE FROM game_log WHERE id=?", (game_id,))
     conn.commit()
     conn.close()

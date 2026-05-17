@@ -739,6 +739,7 @@
           <select id="new-user-role">
             <option value="viewer">Viewer — read only</option>
             <option value="user">User — can log own game</option>
+            <option value="assoc_admin">Assoc. Admin — manage association</option>
             <option value="admin">Admin — full access</option>
           </select>
         </div>
@@ -862,6 +863,10 @@ async function showPage(name) {
       notice.textContent = h
         ? 'Logging as: ' + h.name
         : 'Your account is not linked to a hunter — contact an admin.';
+    } else if (currentUser.role === 'assoc_admin') {
+      notice.style.display = 'block';
+      notice.textContent = 'Adding entry for your association hunters.';
+      notice.style.color = 'var(--gold)';
     } else {
       notice.style.display = 'none';
     }
@@ -1224,6 +1229,7 @@ function filterLog() {
     entries.map(g => {
       let showDelete = false;
       if (currentUser.role === 'admin') showDelete = true;
+      else if (currentUser.role === 'assoc_admin') showDelete = true; // backend enforces assoc scope
       else if (currentUser.role === 'user') showDelete = g.hunter_id === currentUser.hunter_id;
       return {
         _id: showDelete ? g.id : null,
@@ -1258,8 +1264,13 @@ async function populateAddForm(assocId) {
     // User role: always locked to their own hunter
     const allowed = hunters.filter(h => h.id === currentUser.hunter_id);
     sel.innerHTML = allowed.length
-      ? allowed.map(h => `<option value="${h.id}">${h.name}</option>`).join('')
+      ? allowed.map(h => `<option value="${h.id}">${escHtml(h.name)}</option>`).join('')
       : '<option value="">No hunter linked to your account</option>';
+  } else if (currentUser.role === 'assoc_admin') {
+    // assoc_admin: all hunters in their active association (already filtered by apiWithAssoc)
+    sel.innerHTML = hunters.length
+      ? hunters.map(h => `<option value="${h.id}">${escHtml(h.name)}</option>`).join('')
+      : '<option value="">No hunters in your association</option>';
   } else {
     // Admin: fetch hunters filtered by the selected association context
     const filtered = assocId
@@ -1341,7 +1352,11 @@ async function addHunter() {
   } catch (e) {
     const msg = e.message || '';
     if (msg.includes('409') || msg.toLowerCase().includes('already')) {
+      if (currentUser.role === 'assoc_admin') {
+      toast(`"${name}" already exists. Ask an admin to assign them to this association.`, false);
+    } else {
       toast(`"${name}" already exists`, false);
+    }
     } else {
       toast(`Error: ${msg || 'could not reach API'}`, false);
     }
@@ -1360,7 +1375,10 @@ function renderHuntersTable(hunters, totals, allAssocs) {
       <td style="color:var(--fog);font-size:0.85rem;">${h.created_at.slice(0,10)}</td>
       <td style="display:flex;gap:0.4rem;">
         <button class="btn btn-ghost" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openEditHunter(${h.id})">✎</button>
-        <button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deleteHunter(${h.id})">✕</button>
+        ${currentUser.role === 'assoc_admin'
+          ? `<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" title="Remove from this association" onclick="unassignHunter(${h.id},'${escHtml(h.name)}')">⊖</button>`
+          : `<button class="btn btn-danger" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deleteHunter(${h.id})">✕</button>`
+        }
       </td>
     </tr>`).join('')}</tbody>
   </table>`;
@@ -1403,6 +1421,16 @@ async function submitEditHunter() {
     const msg = e.message || '';
     err.textContent = msg.includes('409') ? 'A hunter with that name already exists.' : 'Error: ' + msg;
   }
+}
+
+async function unassignHunter(id, name) {
+  if (!confirm(`Remove "${name}" from this association? The hunter will not be deleted.`)) return;
+  try {
+    await api('/hunters/' + id + '/unassign', { method: 'POST' });
+    toast(name + ' removed from association');
+    hunters = await api(apiWithAssoc('/hunters'));
+    await loadHunters();
+  } catch(e) { toast('Error: ' + (e.message || 'unknown'), false); }
 }
 
 async function deleteHunter(id) {
@@ -1919,8 +1947,8 @@ async function showApp() {
   // Show user badge
   const menu = document.getElementById('user-menu');
   menu.style.display = 'flex';
-  const roleColors = { admin: 'var(--amber)', user: '#7abeae', viewer: 'var(--sage)' };
-  const roleLabels = { admin: 'Admin', user: 'User', viewer: 'Viewer' };
+  const roleColors = { admin: 'var(--amber)', assoc_admin: '#c8a050', user: '#7abeae', viewer: 'var(--sage)' };
+  const roleLabels = { admin: 'Admin', assoc_admin: 'Assoc. Admin', user: 'User', viewer: 'Viewer' };
   const roleColor = roleColors[currentUser.role] || 'var(--sage)';
   const roleLabel = roleLabels[currentUser.role] || currentUser.role;
   const roleBadge = ` <span style="color:${roleColor};">${roleLabel}</span>`;
@@ -1937,16 +1965,19 @@ async function showApp() {
 }
 
 function applyRoleRestrictions() {
-  if (currentUser.role === 'admin') return;
+  const role = currentUser.role;
+  if (role === 'admin') return;
   document.querySelectorAll('#main-nav button').forEach(btn => {
     const text = btn.textContent;
-    // Viewers: hide Add Entry, Embeds, Hunters
-    // Users: hide Embeds and Hunters, but keep Add Entry
-    if (text.includes('Embeds') || text.includes('Hunters')) {
-      btn.style.display = 'none';
-    }
-    if (currentUser.role === 'viewer' && text.includes('Add Entry')) {
-      btn.style.display = 'none';
+    if (role === 'viewer') {
+      // viewer: read-only — hide Add Entry, Hunters, Embeds
+      if (text.includes('Add Entry') || text.includes('Hunters') || text.includes('Embeds')) btn.style.display = 'none';
+    } else if (role === 'user') {
+      // user: can add own entries — hide Hunters, Embeds
+      if (text.includes('Hunters') || text.includes('Embeds')) btn.style.display = 'none';
+    } else if (role === 'assoc_admin') {
+      // assoc_admin: can manage hunters and add entries — hide Embeds only
+      if (text.includes('Embeds')) btn.style.display = 'none';
     }
   });
 }
@@ -2059,9 +2090,10 @@ function renderUsersTable(users, hunterMap, userAssocMap, allAssocs) {
       <td>
         <select onchange="changeRole(${u.id}, this.value)" ${isSelf(u) || u.disabled ? 'disabled' : ''}
           style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.2rem 0.5rem;font-family:inherit;font-size:0.82rem;">
-          <option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>
-          <option value="user"   ${u.role==='user'  ?'selected':''}>User</option>
-          <option value="admin"  ${u.role==='admin' ?'selected':''}>Admin</option>
+          <option value="viewer"      ${u.role==='viewer'     ?'selected':''}>Viewer</option>
+          <option value="user"        ${u.role==='user'       ?'selected':''}>User</option>
+          <option value="assoc_admin" ${u.role==='assoc_admin'?'selected':''}>Assoc. Admin</option>
+          <option value="admin"       ${u.role==='admin'      ?'selected':''}>Admin</option>
         </select>
       </td>
       <td>
@@ -2301,8 +2333,8 @@ async function setupAddEntryAssocSelector() {
   const addAssocDiv = document.getElementById('add-assoc-notice');
   const isAdmin = currentUser.role === 'admin';
 
-  // Association context panel is admin-only on Add Entry
-  if (!isAdmin) {
+  // Association context panel: admin and assoc_admin (assoc_admin needs it to pick active assoc)
+  if (!isAdmin && currentUser.role !== 'assoc_admin') {
     addAssocDiv.style.display = 'none';
     await populateAddForm(null);
     return;
