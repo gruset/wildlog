@@ -40,7 +40,8 @@ def init_db():
             created_at TEXT DEFAULT (datetime('now')),
             last_login TEXT,
             disabled INTEGER NOT NULL DEFAULT 0,
-            hunter_id INTEGER
+            hunter_id INTEGER,
+            language TEXT NOT NULL DEFAULT 'en'
         );
         CREATE TABLE IF NOT EXISTS associations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,6 +102,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0")
     if 'hunter_id' not in cols:
         c.execute("ALTER TABLE users ADD COLUMN hunter_id INTEGER")
+    if 'language' not in cols:
+        c.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'en'")
     vcols = [r[1] for r in c.execute("PRAGMA table_info(saved_views)").fetchall()]
     if 'owner_id' not in vcols:
         c.execute("ALTER TABLE saved_views ADD COLUMN owner_id INTEGER")
@@ -229,7 +232,8 @@ def login():
         session['username']  = user['username']
         session['role']      = user['role']
         session['hunter_id'] = user['hunter_id']
-        return jsonify({'id': user['id'], 'username': user['username'], 'role': user['role']})
+        session['language']  = user['language'] or 'en'
+        return jsonify({'id': user['id'], 'username': user['username'], 'role': user['role'], 'language': user['language'] or 'en'})
     conn.close()
     return jsonify({'error': 'Invalid username or password'}), 401
 
@@ -246,7 +250,7 @@ def me():
     user = conn.execute("SELECT hunter_id FROM users WHERE id=?", (session['user_id'],)).fetchone()
     conn.close()
     hunter_id = user['hunter_id'] if user else None
-    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role'], 'hunter_id': hunter_id, 'site_assoc_id': session.get('site_assoc_id')})
+    return jsonify({'authenticated': True, 'id': session['user_id'], 'username': session['username'], 'role': session['role'], 'hunter_id': hunter_id, 'site_assoc_id': session.get('site_assoc_id'), 'language': session.get('language', 'en')})
 
 
 # ── Users ────────────────────────────────────────────────
@@ -256,7 +260,7 @@ def me():
 def get_users():
     conn = get_db()
     rows = conn.execute(
-        "SELECT id,username,role,created_at,last_login,disabled,hunter_id FROM users ORDER BY username"
+        "SELECT id,username,role,created_at,last_login,disabled,hunter_id,language FROM users ORDER BY username"
     ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -274,11 +278,12 @@ def create_user():
         return jsonify({'error': 'Role must be admin, assoc_admin, viewer or user'}), 400
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
-    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    pw_hash  = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    language = data.get('language', 'en') if data.get('language') in ('en', 'da') else 'en'
     conn = get_db()
     try:
-        conn.execute("INSERT INTO users (username,password_hash,role) VALUES(?,?,?)",
-                     (username, pw_hash, role))
+        conn.execute("INSERT INTO users (username,password_hash,role,language) VALUES(?,?,?,?)",
+                     (username, pw_hash, role, language))
         conn.commit()
         user = conn.execute(
             "SELECT id,username,role,created_at FROM users WHERE username=?", (username,)
@@ -588,6 +593,23 @@ def set_user_associations(user_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+@app.route('/api/users/<int:user_id>/language', methods=['POST'])
+@login_required
+def set_language(user_id):
+    if session['role'] != 'admin' and session['user_id'] != user_id:
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.json or {}
+    lang = data.get('language', 'en')
+    if lang not in ('en', 'da'):
+        return jsonify({'error': 'Supported languages: en, da'}), 400
+    conn = get_db()
+    conn.execute("UPDATE users SET language=? WHERE id=?", (lang, user_id))
+    conn.commit()
+    conn.close()
+    session['language'] = lang
+    return jsonify({'success': True, 'language': lang})
+
 
 # ── Health ────────────────────────────────────────────────
 
