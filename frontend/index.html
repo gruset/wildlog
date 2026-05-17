@@ -559,7 +559,7 @@
   <div id="page-add" class="page">
     <div id="add-assoc-notice" style="display:none;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(45,30,15,0.4);border:1px solid rgba(200,134,10,0.2);border-radius:6px;">
       <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--fog);margin-bottom:0.4rem;">Association context</div>
-      <select id="add-assoc-select" style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.4rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
+      <select id="add-assoc-select" onchange="onAddAssocChange()" style="background:rgba(10,8,5,0.5);border:1px solid rgba(200,134,10,0.3);border-radius:4px;color:var(--cream);padding:0.4rem 0.75rem;font-family:inherit;font-size:0.85rem;width:100%;">
         <option value="">All / no filter</option>
       </select>
       <div style="font-size:0.75rem;color:var(--fog);margin-top:0.4rem;">This entry will be attributed to the hunter's association(s), not filtered by this selection. Use this for your own reference.</div>
@@ -865,21 +865,7 @@ async function showPage(name) {
     } else {
       notice.style.display = 'none';
     }
-    // Show association context selector for admins (if associations exist)
-    const addAssocDiv = document.getElementById('add-assoc-notice');
-    if (currentUser.role === 'admin') {
-      const assocs = await api('/associations');
-      if (assocs.length > 0) {
-        const sel = document.getElementById('add-assoc-select');
-        sel.innerHTML = '<option value="">All / no filter</option>' +
-          assocs.map(a => `<option value="${a.id}" ${currentUser.site_assoc_id == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
-        addAssocDiv.style.display = 'block';
-      } else {
-        addAssocDiv.style.display = 'none';
-      }
-    } else {
-      addAssocDiv.style.display = 'none';
-    }
+    await setupAddEntryAssocSelector();
   }
   if (name === 'hunters') loadHunters();
   if (name === 'views') loadViews();
@@ -1266,15 +1252,22 @@ async function deleteEntry(id) {
 }
 
 // ─── ADD ENTRY ───────────────────────────────────────────
-function populateAddForm() {
+async function populateAddForm(assocId) {
   const sel = document.getElementById('add-hunter');
-  // 'user' role can only select their own linked hunter
-  const allowed = currentUser.role === 'user'
-    ? hunters.filter(h => h.id === currentUser.hunter_id)
-    : hunters;
-  sel.innerHTML = allowed.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
-  if (!allowed.length && currentUser.role === 'user') {
-    sel.innerHTML = '<option value="">No hunter linked to your account</option>';
+  if (currentUser.role === 'user') {
+    // User role: always locked to their own hunter
+    const allowed = hunters.filter(h => h.id === currentUser.hunter_id);
+    sel.innerHTML = allowed.length
+      ? allowed.map(h => `<option value="${h.id}">${h.name}</option>`).join('')
+      : '<option value="">No hunter linked to your account</option>';
+  } else {
+    // Admin: fetch hunters filtered by the selected association context
+    const filtered = assocId
+      ? await api('/hunters?association_id=' + assocId)
+      : hunters;  // use cached list when no filter
+    sel.innerHTML = filtered.length
+      ? filtered.map(h => `<option value="${h.id}">${escHtml(h.name)}</option>`).join('')
+      : '<option value="">No hunters in this association</option>';
   }
   if (!document.getElementById('add-date').value)
     document.getElementById('add-date').value = new Date().toISOString().slice(0,10);
@@ -2269,6 +2262,60 @@ async function deleteAssoc(id, name) {
     await loadAssociationsPage();
     await loadAssocSelector();
   } catch(e) { toast('Error deleting association', false); }
+}
+
+
+async function setupAddEntryAssocSelector() {
+  const addAssocDiv = document.getElementById('add-assoc-notice');
+  const isAdmin = currentUser.role === 'admin';
+
+  // Show for admins always (if assocs exist); show for users with ≥2 assocs (view-only)
+  const assocs = await api('/associations');
+
+  // For user role — check how many they belong to (assocs already filtered to theirs)
+  const showForUser = currentUser.role === 'user' && assocs.length >= 2;
+
+  if (!isAdmin && !showForUser) {
+    addAssocDiv.style.display = 'none';
+    await populateAddForm(currentAssocId);
+    return;
+  }
+
+  if (assocs.length === 0) {
+    addAssocDiv.style.display = 'none';
+    await populateAddForm(null);
+    return;
+  }
+
+  const sel = document.getElementById('add-assoc-select');
+  // Resolve which assoc is active: site-wide filter, or first assoc for users
+  const activeId = currentAssocId ||
+    (currentUser.role === 'user' && assocs.length ? assocs[0].id : null);
+
+  if (isAdmin) {
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">All associations</option>' +
+      assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+  } else {
+    // User role: show read-only (disabled select showing active assoc or all)
+    sel.disabled = true;
+    sel.innerHTML = assocs.map(a => `<option value="${a.id}" ${activeId == a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`).join('');
+  }
+
+  // Update hint text
+  const hint = addAssocDiv.querySelector('div:last-child');
+  if (hint) hint.textContent = isAdmin
+    ? 'Filter the hunter dropdown by association. Entry attributed to hunter associations.'
+    : 'You are viewing this association. Use the global filter to switch.';
+
+  addAssocDiv.style.display = 'block';
+  await populateAddForm(sel.disabled ? null : (sel.value ? parseInt(sel.value) : null));
+}
+
+async function onAddAssocChange() {
+  const sel = document.getElementById('add-assoc-select');
+  const assocId = sel.value ? parseInt(sel.value) : null;
+  await populateAddForm(assocId);
 }
 
 // ─── START ───────────────────────────────────────────────
