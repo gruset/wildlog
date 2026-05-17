@@ -276,11 +276,11 @@ const LANGS = {
     language:          '🌐 Sprog',
 
     // ── Dashboard ────────────────────────────────────────
-    stat_total:        'Samlet vildtbytte',
+    stat_total:        'Samlet vildtudbytte',
     stat_hunters:      'Jægere',
     stat_species:      'Dyrearter',
     stat_best:         'Bedste jæger',
-    chart_per_hunter:  'Vildtbytte pr. jæger — Oversigt',
+    chart_per_hunter:  'Vildtudbytte pr. jæger — Oversigt',
     chart_by_species:  'Pr. dyreart',
     recent_entries:    'Seneste indgange',
 
@@ -314,7 +314,7 @@ const LANGS = {
     col_notes:         'Noter',
 
     // ── Add Entry ────────────────────────────────────────
-    add_entry_title:   'Tilføj vildtindgang',
+    add_entry_title:   'Tilføj nedlagt vildt',
     lbl_hunter_req:    'Jæger *',
     lbl_species_req:   'Dyreart *',
     lbl_count_req:     'Antal *',
@@ -325,10 +325,10 @@ const LANGS = {
     btn_clear_form:    'Ryd',
     assoc_context:     'Foreningskontekst',
     assoc_hint_admin:  'Filtrer jægerlisten efter forening.',
-    assoc_hint_aa:     'Vælg den forening du vil tilføje indgange for.',
+    assoc_hint_aa:     'Vælg den forening du vil tilføje nedlagt vildt for.',
     logging_as:        'Logger som',
     no_hunter_linked:  'Din konto er ikke tilknyttet en jæger — kontakt en administrator.',
-    adding_for_assoc:  'Tilføjer indgang for foreningens jægere.',
+    adding_for_assoc:  'Tilføjer nedlagt vildt for foreningens jægere.',
 
     // ── Hunters ──────────────────────────────────────────
     add_hunter_title:  'Tilføj jæger',
