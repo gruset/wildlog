@@ -282,7 +282,7 @@ const LANGS = {
     stat_best:         'Bedste jæger',
     chart_per_hunter:  'Vildtudbytte pr. jæger — Oversigt',
     chart_by_species:  'Pr. dyreart',
-    recent_entries:    'Seneste indgange',
+    recent_entries:    'Seneste indberetninger',
 
     // ── Leaderboard ──────────────────────────────────────
     filter_leaderboard: '⚙ Filtrer topliste',
@@ -305,7 +305,7 @@ const LANGS = {
     lbl_search:        'Søg',
     btn_filter:        'Filtrer',
     btn_clear:         'Ryd',
-    all_entries:       'Alle indgange',
+    all_entries:       'Alle indberetninger',
     col_hunter:        'Jæger',
     col_species:       'Dyreart',
     col_count:         'Antal',
@@ -321,7 +321,7 @@ const LANGS = {
     lbl_date_req:      'Jagtdato *',
     lbl_location:      'Sted',
     lbl_notes:         'Noter',
-    btn_save_entry:    'Gem indgang',
+    btn_save_entry:    'Gem indberetning',
     btn_clear_form:    'Ryd',
     assoc_context:     'Foreningskontekst',
     assoc_hint_admin:  'Filtrer jægerlisten efter forening.',
